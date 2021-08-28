@@ -20,17 +20,10 @@ class _StickersWidgetState extends State<StickersWidget> {
   bool _visible = true;
   List<Attachment> stickers = [];
   List<String> loaded = [];
-  Completer? request;
 
   @override
   void initState() {
     super.initState();
-    loadStickers();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
     loadStickers();
   }
 
@@ -42,13 +35,6 @@ class _StickersWidgetState extends State<StickersWidget> {
   }
 
   Future<void> loadStickers() async {
-    // If we are already trying to load the stickers, don't try again
-    if (request != null && !request!.isCompleted) {
-      return;
-    }
-
-    request = new Completer();
-
     // For each message, load the sticker for it
     for (Message msg in widget.messages) {
       // If the message type isn't a sticker, skip it
@@ -82,7 +68,6 @@ class _StickersWidgetState extends State<StickersWidget> {
 
     // Fulfill/Complete any outstanding requests
     if (this.mounted) setState(() {});
-    request!.complete();
   }
 
   @override
@@ -90,7 +75,7 @@ class _StickersWidgetState extends State<StickersWidget> {
     if (this.stickers.isEmpty) return Container();
 
     // Turn the attachments into Image Widgets
-    List<Widget> stickers = this.stickers.map((item) {
+    final List<Widget> stickers = this.stickers.map((item) {
       String pathName = AttachmentHelper.getAttachmentPath(item);
       return Image.file(new File(pathName), width: context.width * 2 / 3, height: context.width * 2 / 4);
     }).toList();

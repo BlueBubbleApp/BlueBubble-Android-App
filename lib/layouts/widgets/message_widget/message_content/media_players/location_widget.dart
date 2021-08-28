@@ -7,7 +7,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:map_launcher/map_launcher.dart' as ML;
 
-class LocationWidget extends StatefulWidget {
+class LocationWidget extends StatelessWidget {
   LocationWidget({
     Key? key,
     required this.file,
@@ -16,50 +16,30 @@ class LocationWidget extends StatefulWidget {
   final File file;
   final Attachment attachment;
 
-  @override
-  _LocationWidgetState createState() => _LocationWidgetState();
-}
-
-class _LocationWidgetState extends State<LocationWidget> with AutomaticKeepAliveClientMixin {
-  AppleLocation? location;
-
-  @override
-  void initState() {
-    super.initState();
-    loadLocation();
+  AppleLocation? loadLocation() {
+    String _location = file.readAsStringSync();
+    return AttachmentHelper.parseAppleLocation(_location);
   }
 
-  void loadLocation() {
-    // If we already have location data, don't load it again
-    if (location != null) return;
-    String _location = widget.file.readAsStringSync();
-    location = AttachmentHelper.parseAppleLocation(_location);
-
-    if (location != null && this.mounted) {
-      setState(() {});
-    }
-  }
-
-  void openMaps() async {
+  void openMaps(AppleLocation? location) async {
     if (location == null) return;
     final availableMaps = await ML.MapLauncher.installedMaps;
 
     await availableMaps.first.showMarker(
-      coords: ML.Coords(location!.longitude!, location!.latitude!),
+      coords: ML.Coords(location.longitude!, location.latitude!),
       title: "Shared Location",
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-
+    final location = loadLocation();
     if (location != null &&
-        location!.longitude != null &&
-        location!.longitude!.abs() < 90 &&
-        location!.latitude != null) {
+        location.longitude != null &&
+        location.longitude!.abs() < 90 &&
+        location.latitude != null) {
       return GestureDetector(
-          onTap: openMaps,
+          onTap: () => openMaps(location),
           child: Container(
               height: 240,
               color: Theme.of(context).accentColor,
@@ -72,7 +52,7 @@ class _LocationWidgetState extends State<LocationWidget> with AutomaticKeepAlive
                         height: 200,
                         child: FlutterMap(
                           options: MapOptions(
-                            center: LatLng(location!.longitude!, location!.latitude!),
+                            center: LatLng(location.longitude!, location.latitude!),
                             zoom: 14.0,
                           ),
                           layers: [
@@ -86,7 +66,7 @@ class _LocationWidgetState extends State<LocationWidget> with AutomaticKeepAlive
                                 new Marker(
                                   width: 40.0,
                                   height: 40.0,
-                                  point: new LatLng(location!.longitude!, location!.latitude!),
+                                  point: new LatLng(location.longitude!, location.latitude!),
                                   builder: (ctx) => new Container(
                                     child: Icon(Icons.pin_drop, color: Colors.red, size: 45),
                                   ),
@@ -96,7 +76,7 @@ class _LocationWidgetState extends State<LocationWidget> with AutomaticKeepAlive
                           ],
                         )),
                     InkWell(
-                        onTap: openMaps,
+                        onTap: () => openMaps(location),
                         child: Padding(
                             padding: EdgeInsets.only(top: 11, bottom: 10),
                             child: Text("Open in Maps", style: Theme.of(context).textTheme.bodyText1)))
@@ -111,7 +91,4 @@ class _LocationWidgetState extends State<LocationWidget> with AutomaticKeepAlive
       );
     }
   }
-
-  @override
-  bool get wantKeepAlive => true;
 }

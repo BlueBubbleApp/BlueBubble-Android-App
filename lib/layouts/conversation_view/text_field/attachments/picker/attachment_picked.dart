@@ -6,16 +6,16 @@ import 'package:flutter/material.dart';
 import 'package:mime_type/mime_type.dart';
 import 'package:photo_manager/photo_manager.dart';
 
-class AttachmentPicked extends StatefulWidget {
-  AttachmentPicked({Key? key, required this.onTap, required this.data}) : super(key: key);
+class GalleryAttachment extends StatefulWidget {
+  GalleryAttachment({Key? key, required this.onTap, required this.data}) : super(key: key);
   final AssetEntity data;
   final Function onTap;
 
   @override
-  _AttachmentPickedState createState() => _AttachmentPickedState();
+  _GalleryAttachmentState createState() => _GalleryAttachmentState();
 }
 
-class _AttachmentPickedState extends State<AttachmentPicked> with AutomaticKeepAliveClientMixin {
+class _GalleryAttachmentState extends State<GalleryAttachment> with AutomaticKeepAliveClientMixin {
   Uint8List? image;
   String? path;
 

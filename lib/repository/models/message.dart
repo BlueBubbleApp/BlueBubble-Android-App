@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:collection/src/iterable_extensions.dart';
+import 'package:collection/collection.dart';
 import 'package:crypto/crypto.dart' as crypto;
 
 import 'package:bluebubbles/helpers/message_helper.dart';

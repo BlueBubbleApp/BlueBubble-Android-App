@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:bluebubbles/helpers/constants.dart';
 import 'package:bluebubbles/helpers/utils.dart';
-import 'package:bluebubbles/managers/attachment_info_bloc.dart';
 import 'package:bluebubbles/managers/contact_manager.dart';
 import 'package:bluebubbles/managers/method_channel_interface.dart';
 import 'package:bluebubbles/managers/new_message_manager.dart';
@@ -28,6 +27,8 @@ class ChatBloc {
 
   final RxBool hasChats = false.obs;
   final RxBool loadedChats = false.obs;
+
+  final List<String> currentChatGuids = [];
 
   void updateUnreads() {
     _unreads.value = chats.where((element) => element.hasUnreadMessage ?? false).map((e) => e.guid).toList().length;
@@ -294,7 +295,7 @@ class ChatBloc {
     if (chat.title == null) {
       await chat.getTitle();
     }
-    AttachmentInfoBloc().initChat(chat);
+    //AttachmentInfoBloc().initChat(chat);
   }
 
   void archiveChat(Chat chat) async {

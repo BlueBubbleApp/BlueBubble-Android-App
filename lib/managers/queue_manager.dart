@@ -1,11 +1,11 @@
 import 'package:bluebubbles/managers/method_channel_interface.dart';
 import 'package:flutter/material.dart';
 
-class QueueItem {
+class QueueItem<T> {
   String event;
-  dynamic item;
+  T item;
 
-  QueueItem({required this.event, this.item});
+  QueueItem({required this.event, required this.item});
 }
 
 abstract class QueueManager {
@@ -26,7 +26,7 @@ abstract class QueueManager {
     // If there are no queued items, we are done processing
     if (this.queue.isEmpty) {
       this.isProcessing = false;
-      //MethodChannelInterface().closeThread();
+      MethodChannelInterface().closeThread();
       return;
     }
 
@@ -35,9 +35,7 @@ abstract class QueueManager {
     QueueItem queued = this.queue.removeAt(0);
 
     try {
-      await beforeProcessing(queued, {});
       await handleQueueItem(queued);
-      await afterProcessing(queued, {});
     } catch (ex, stacktrace) {
       debugPrint("Failed to handle queued item! " + ex.toString());
       debugPrint(stacktrace.toString());
@@ -47,18 +45,6 @@ abstract class QueueManager {
     await processNextItem();
   }
 
-  /// Performs pre-processing before the [item] is handled by the implementer.
-  /// You can pass any number of [params] using the second Map parameter
-  Future<void> beforeProcessing(QueueItem item, Map params) async {
-    /* Do Nothing */
-  }
-
   /// Handles the currently passed [item] from the queue
   Future<void> handleQueueItem(QueueItem item);
-
-  /// Performs post-processing before the [item] is handled by the implementer.
-  /// You can pass any number of [params] using the second Map parameter
-  Future<void> afterProcessing(QueueItem item, Map params) async {
-    /* Do Nothing */
-  }
 }

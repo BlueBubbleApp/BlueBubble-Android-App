@@ -86,23 +86,16 @@ class ThemeEntry {
 
   Future<ThemeEntry> update(ThemeObject theme) async {
     final Database db = await DBProvider.db.database;
-
-    // If it already exists, update it
-    if (this.id != null) {
-      await db.update(
-          "theme_values",
-          {
-            "name": this.name,
-            "color": this.color!.value.toRadixString(16),
-            "isFont": this.isFont! ? 1 : 0,
-            "fontSize": this.fontSize,
-          },
-          where: "ROWID = ?",
-          whereArgs: [this.id]);
-    } else {
-      await this.save(theme, updateIfAbsent: false);
-    }
-
+    await db.update(
+        "theme_values",
+        {
+          "name": this.name,
+          "color": this.color!.value.toRadixString(16),
+          "isFont": this.isFont! ? 1 : 0,
+          "fontSize": this.fontSize,
+        },
+        where: "ROWID = ?",
+        whereArgs: [this.id]);
     return this;
   }
 

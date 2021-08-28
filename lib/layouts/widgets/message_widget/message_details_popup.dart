@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 import 'package:bluebubbles/helpers/metadata_helper.dart';
-import 'package:bluebubbles/layouts/widgets/message_widget/message_content/message_attachment.dart';
 import 'package:bluebubbles/managers/method_channel_interface.dart';
 import 'package:bluebubbles/repository/models/handle.dart';
 import 'package:collection/collection.dart';
@@ -63,7 +62,6 @@ class MessageDetailsPopupState extends State<MessageDetailsPopup> with TickerPro
   bool showTools = false;
   String? selfReaction;
   String? currentlySelectedReaction;
-  Completer? fetchRequest;
   CurrentChat? currentChat;
   Chat? dmChat;
 
@@ -93,12 +91,7 @@ class MessageDetailsPopupState extends State<MessageDetailsPopup> with TickerPro
           showTools = true;
         });
     });
-  }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    fetchReactions();
     SchedulerBinding.instance!.addPostFrameCallback((_) {
       if (this.mounted) {
         setState(() {
@@ -115,18 +108,10 @@ class MessageDetailsPopupState extends State<MessageDetailsPopup> with TickerPro
   }
 
   Future<void> fetchReactions() async {
-    if (fetchRequest != null && !fetchRequest!.isCompleted) {
-      return fetchRequest!.future;
-    }
-
-    // Create a new fetch request
-    fetchRequest = new Completer();
 
     // If there are no associated messages, return now
     List<Message> reactions = widget.message.getReactions();
-    if (reactions.isEmpty) {
-      return fetchRequest!.complete();
-    }
+    if (reactions.isEmpty) return;
 
     // Filter down the messages to the unique ones (one per user, newest)
     List<Message> reactionMessages = Reaction.getUniqueReactionMessages(reactions);
@@ -146,12 +131,7 @@ class MessageDetailsPopupState extends State<MessageDetailsPopup> with TickerPro
       );
     }
 
-    // If we aren't mounted, get out
-    if (!this.mounted) return fetchRequest!.complete();
-
-    // Tell the component to re-render
-    this.setState(() {});
-    return fetchRequest!.complete();
+    if (mounted) setState(() {});
   }
 
   void sendReaction(String type) {
@@ -198,6 +178,10 @@ class MessageDetailsPopupState extends State<MessageDetailsPopup> with TickerPro
                 child: Container(
                   width: widget.childSize!.width,
                   height: widget.childSize!.height,
+                  constraints: BoxConstraints(
+                    maxWidth: widget.childSize!.width,
+                    maxHeight: widget.childSize!.height,
+                  ),
                   child: widget.child,
                 ),
               ),
@@ -252,16 +236,15 @@ class MessageDetailsPopupState extends State<MessageDetailsPopup> with TickerPro
   }
 
   Widget buildReactionMenu() {
-    Size size = Get.mediaQuery.size;
-
-    double reactionIconSize = ((8.5 / 10 * min(size.width, size.height)) / (ReactionTypes.toList().length).toDouble());
+    double reactionIconSize = ((8.5 / 10 * min(context.width, context.height)) / (ReactionTypes.toList().length).toDouble()).clamp(50, 60);
     double maxMenuWidth = (ReactionTypes.toList().length * reactionIconSize).toDouble();
+    maxMenuWidth = min(context.width - 50, maxMenuWidth + 30);
     double menuHeight = (reactionIconSize).toDouble();
     double topPadding = -20;
-    double topOffset = (messageTopOffset - menuHeight).toDouble().clamp(topMinimum, size.height - 120 - menuHeight);
+    double topOffset = (messageTopOffset - menuHeight).toDouble().clamp(topMinimum, context.height - 120 - menuHeight);
     bool shiftRight = currentChat!.chat.isGroup() || SettingsManager().settings.alwaysShowAvatars.value;
     double leftOffset =
-        (widget.message.isFromMe! ? size.width - maxMenuWidth - 25 : 25 + (shiftRight ? 20 : 0)).toDouble();
+        (widget.message.isFromMe! ? context.width - maxMenuWidth - 25 : 25 + (shiftRight ? 20 : 0)).toDouble();
     Color iconColor = Colors.white;
 
     if (Theme.of(context).accentColor.computeLuminance() >= 0.179) {
@@ -278,13 +261,15 @@ class MessageDetailsPopupState extends State<MessageDetailsPopup> with TickerPro
           child: Container(
             padding: const EdgeInsets.all(5),
             height: menuHeight,
+            width: maxMenuWidth,
             decoration: BoxDecoration(
               color: Theme.of(context).accentColor.withAlpha(150),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.start,
+            child: ListView(
+              shrinkWrap: true,
+              scrollDirection: Axis.horizontal,
+              physics: ThemeSwitcher.getScrollPhysics(),
               children: ReactionTypes.toList()
                   .map(
                     (e) => Padding(
@@ -593,7 +578,7 @@ class MessageDetailsPopupState extends State<MessageDetailsPopup> with TickerPro
           child: InkWell(
             onTap: () {
               for (Attachment? element in widget.message.attachments!) {
-                CurrentChat.of(context)?.clearImageData(element!);
+                currentChat?.clearImageData(element!);
                 AttachmentHelper.redownloadAttachment(element!);
               }
               setState(() {});

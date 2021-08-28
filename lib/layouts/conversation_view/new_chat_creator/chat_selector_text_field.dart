@@ -9,7 +9,7 @@ import 'package:bluebubbles/managers/contact_manager.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-class ChatSelectorTextField extends StatefulWidget {
+class ChatSelectorTextField extends StatelessWidget {
   ChatSelectorTextField({
     Key? key,
     required this.controller,
@@ -25,25 +25,7 @@ class ChatSelectorTextField extends StatefulWidget {
   final List<UniqueContact> selectedContacts;
   final List<UniqueContact> allContacts;
   final Function(UniqueContact item) onSelected;
-
-  @override
-  _ChatSelectorTextFieldState createState() => _ChatSelectorTextFieldState();
-}
-
-class _ChatSelectorTextFieldState extends State<ChatSelectorTextField> {
-  late FocusNode inputFieldNode;
-
-  @override
-  void initState() {
-    super.initState();
-    inputFieldNode = FocusNode();
-  }
-
-  @override
-  void dispose() {
-    inputFieldNode.dispose();
-    super.dispose();
-  }
+  final FocusNode inputFieldNode = FocusNode();
 
   @override
   Widget build(BuildContext context) {
@@ -51,11 +33,11 @@ class _ChatSelectorTextFieldState extends State<ChatSelectorTextField> {
     final bool redactedMode = SettingsManager().settings.redactedMode.value;
     final bool hideInfo = redactedMode && SettingsManager().settings.hideContactInfo.value;
     final bool generateName = redactedMode && SettingsManager().settings.generateFakeContactNames.value;
-    widget.selectedContacts.forEachIndexed((index, contact) {
+    selectedContacts.forEachIndexed((index, contact) {
       items.add(
         GestureDetector(
           onTap: () {
-            widget.onRemove(contact);
+            onRemove(contact);
           },
           child: Padding(
             padding: EdgeInsets.only(right: 5.0, top: 2.0, bottom: 2.0),
@@ -106,20 +88,20 @@ class _ChatSelectorTextFieldState extends State<ChatSelectorTextField> {
             if (done.isEmail || done.isPhoneNumber) {
               Contact? contact = ContactManager().getCachedContactSync(done);
               if (contact == null) {
-                widget.onSelected(new UniqueContact(address: done, displayName: await formatPhoneNumber(done)));
+                onSelected(new UniqueContact(address: done, displayName: await formatPhoneNumber(done)));
               } else {
-                widget.onSelected(new UniqueContact(address: done, displayName: contact.displayName ?? done));
+                onSelected(new UniqueContact(address: done, displayName: contact.displayName ?? done));
               }
             } else {
-              if (widget.allContacts.isEmpty) {
+              if (allContacts.isEmpty) {
                 showSnackbar('Error', "Invalid Number/Email, $done");
                 // This is 4 chars due to invisible character
-              } else if (widget.controller.text.length >= 4) {
-                widget.onSelected(widget.allContacts[0]);
+              } else if (controller.text.length >= 4) {
+                onSelected(allContacts[0]);
               }
             }
           },
-          controller: widget.controller,
+          controller: controller,
           maxLength: 50,
           maxLines: 1,
           autocorrect: false,
@@ -165,19 +147,6 @@ class _ChatSelectorTextFieldState extends State<ChatSelectorTextField> {
               ),
             ),
           ),
-          // Padding(
-          //   padding: EdgeInsets.only(left: 12, right: 10.0),
-          //   child: FlatButton(
-          //     color: Theme.of(context).accentColor,
-          //     onPressed: () async {
-          //       // widget.onCreate();
-          //     },
-          //     child: Text(
-          //       ChatSelector.of(context).widget.isCreator ? "Create" : "Add",
-          //       style: Theme.of(context).textTheme.bodyText1,
-          //     ),
-          //   ),
-          // )
         ],
       ),
     );

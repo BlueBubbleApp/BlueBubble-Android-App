@@ -55,23 +55,13 @@ public class MainActivity extends FlutterFragmentActivity {
     public static int OPEN_CAMERA = 2000;
     public MethodChannel.Result result = null;
 
-
-    @RequiresApi(api = Build.VERSION_CODES.M)
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState, @Nullable PersistableBundle persistentState) {
-        super.onCreate(savedInstanceState, persistentState);
-    }
-
-
-    @SuppressLint("RestrictedApi")
-    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
-        GeneratedPluginRegistrant.registerWith(flutterEngine);
         engine = flutterEngine;
 
         new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), CHANNEL)
-                .setMethodCallHandler(((call, result) -> MethodCallHandler.methodCallHandler(call, result, MainActivity.this, null)));
+                .setMethodCallHandler(((call, result) -> MethodCallHandler.methodCallHandler(call, result, MainActivity.this, null, null)));
+        GeneratedPluginRegistrant.registerWith(flutterEngine);
     }
 
 
@@ -295,9 +285,9 @@ public class MainActivity extends FlutterFragmentActivity {
 
     @Override
     protected void onStart() {
-        super.onStart();
         LocalBroadcastManager.getInstance(this).registerReceiver(mMessageReceiver, new IntentFilter("MyData"));
         WorkManager.getInstance(getApplicationContext()).cancelAllWork();
+        super.onStart();
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
@@ -312,6 +302,7 @@ public class MainActivity extends FlutterFragmentActivity {
     @Override
     protected void onStop() {
         Log.d("MainActivity", "Stopping Activity (isFinishing: " + isFinishing() + ")");
+        engine = null;
         super.onStop();
     }
 

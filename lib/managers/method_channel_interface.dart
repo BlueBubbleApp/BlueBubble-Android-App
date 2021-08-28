@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:bluebubbles/action_handler.dart';
 import 'package:bluebubbles/blocs/chat_bloc.dart';
 import 'package:bluebubbles/blocs/text_field_bloc.dart';
+import 'package:bluebubbles/helpers/logger.dart';
 import 'package:bluebubbles/helpers/utils.dart';
 import 'package:bluebubbles/layouts/conversation_view/conversation_view.dart';
 import 'package:bluebubbles/layouts/testing_mode.dart';
@@ -13,7 +14,6 @@ import 'package:bluebubbles/managers/alarm_manager.dart';
 import 'package:bluebubbles/managers/current_chat.dart';
 import 'package:bluebubbles/managers/event_dispatcher.dart';
 import 'package:bluebubbles/managers/incoming_queue.dart';
-import 'package:bluebubbles/managers/navigator_manager.dart';
 import 'package:bluebubbles/managers/notification_manager.dart';
 import 'package:bluebubbles/managers/queue_manager.dart';
 import 'package:bluebubbles/managers/settings_manager.dart';
@@ -57,6 +57,8 @@ class MethodChannelInterface {
 
     // We set the handler for all of the method calls from the platform to be the [callHandler]
     platform.setMethodCallHandler(_callHandler);
+    // If we are running in the background, inform Java that the method channel
+    // has been initialized and it can start sending messages
     platform.invokeMethod<void>('MessagingBackground#initialized');
   }
 
@@ -89,7 +91,7 @@ class MethodChannelInterface {
 
         return new Future.value("");
       case "new-message":
-        print("Received new message from FCM");
+        Logger.instance.log("Received new message from FCM");
         // Retreive the data for this message as a json
         Map<String, dynamic>? data = jsonDecode(call.arguments);
 
@@ -200,7 +202,7 @@ class MethodChannelInterface {
         }
 
         // Go to the new chat creator with all of these attachments to select a chat in case it wasn't a direct share
-        NavigatorManager().navigatorKey.currentState!.pushAndRemoveUntil(
+        Get.offUntil(
               ThemeSwitcher.buildPageRoute(
                 builder: (context) => ConversationView(
                   existingAttachments: attachments,
@@ -238,7 +240,7 @@ class MethodChannelInterface {
           }
         }
         // Navigate to the new chat creator with the specified text
-        NavigatorManager().navigatorKey.currentState!.pushAndRemoveUntil(
+        Get.offUntil(
               ThemeSwitcher.buildPageRoute(
                 builder: (context) => ConversationView(
                   existingText: text,
@@ -270,7 +272,7 @@ class MethodChannelInterface {
 
   Future<void> openChat(String id, {List<File> existingAttachments = const [], String? existingText}) async {
     if (id == "-1") {
-      NavigatorManager().navigatorKey.currentState!.popUntil((route) => route.isFirst);
+      Get.until((route) => route.isFirst);
       return;
     }
     if (CurrentChat.activeChat?.chat.guid == id) {
@@ -280,11 +282,11 @@ class MethodChannelInterface {
         data.attachments.addAll(existingAttachments);
         final ids = data.attachments.map((e) => e.path).toSet();
         data.attachments.retainWhere((element) => ids.remove(element.path));
-        EventDispatcher().emit("text-field-update-attachments", null);
+        EventDispatcher.instance.emit("text-field-update-attachments", null);
       }
       if (existingText != null) {
         data?.controller.text = existingText;
-        EventDispatcher().emit("text-field-update-text", null);
+        EventDispatcher.instance.emit("text-field-update-text", null);
       }
       return;
     }
@@ -304,8 +306,7 @@ class MethodChannelInterface {
 
       // if (!CurrentChat.isActive(openedChat.guid))
       // Actually navigate to the chat page
-      NavigatorManager().navigatorKey.currentState!
-        ..pushAndRemoveUntil(
+      Get.offUntil(
           ThemeSwitcher.buildPageRoute(
             builder: (context) => ConversationView(
               chat: openedChat,

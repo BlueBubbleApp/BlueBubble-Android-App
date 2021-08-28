@@ -26,59 +26,34 @@ class SearchView extends StatefulWidget {
 
 class SearchViewState extends State<SearchView> with TickerProviderStateMixin {
   List<dynamic> results = [];
-
-  GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
-  final Duration animationDuration = Duration(milliseconds: 400);
   final TextEditingController textEditingController = new TextEditingController();
-
   bool isSearching = false;
   Map<String, Chat> chatCache = {};
   FocusNode _focusNode = new FocusNode();
   Map<String, int> resultCache = {};
   bool noResults = false;
-  String? previousSearch;
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Listen for any incoming events
-    EventDispatcher().stream.listen((Map<String, dynamic> event) {
-      if (!event.containsKey("type")) return;
-      if (event["type"] == 'theme-update' && this.mounted) {
-        setState(() {});
-      }
-    });
-
-    // When the user types again after no results, reset no results
-    textEditingController.addListener(() {
-      if (textEditingController.text != previousSearch && noResults && this.mounted) {
-        setState(() {
-          noResults = false;
-        });
-      }
-    });
-
-    _focusNode.requestFocus();
-  }
 
   Future<void> search(String term) async {
-    if (isSearching || isNullOrEmpty(term)! || term.length < 3) return;
+    if (isSearching || isNullOrEmpty(term)! || term.length < 3) {
+      setState(() {
+        noResults = true;
+        isSearching = false;
+      });
+      return;
+    }
     _focusNode.unfocus();
-    noResults = false;
-    previousSearch = term;
 
     // If we've already searched for the results and there are none, set no results and return
     if (resultCache.containsKey(term) && resultCache[term] == 0 && this.mounted) {
       setState(() {
         noResults = true;
       });
-
       return;
     }
 
     if (this.mounted)
       setState(() {
+        noResults = false;
         isSearching = true;
       });
 
@@ -118,10 +93,6 @@ class SearchViewState extends State<SearchView> with TickerProviderStateMixin {
     }
 
     this.results = _results;
-    _listKey = new GlobalKey<AnimatedListState>();
-
-    // Let the animated list know it should update
-    _listKey.currentState?.setState(() {});
 
     // Add the cached result
     resultCache[term] = this.results.length;
@@ -186,7 +157,7 @@ class SearchViewState extends State<SearchView> with TickerProviderStateMixin {
                             focusNode: _focusNode,
                             padding: EdgeInsets.symmetric(horizontal: 15.0, vertical: 10),
                             controller: textEditingController,
-                            placeholder: "Enter a search term...",
+                            placeholder: "Enter a search term with at least 3 characters...",
                             style: Theme.of(context).textTheme.bodyText1,
                             placeholderStyle: Theme.of(context).textTheme.subtitle1,
                             decoration: BoxDecoration(
@@ -223,10 +194,9 @@ class SearchViewState extends State<SearchView> with TickerProviderStateMixin {
                 : (!this.isSearching)
                     ? Flexible(
                         fit: FlexFit.loose,
-                        child: AnimatedList(
-                          key: _listKey,
-                          initialItemCount: results.length,
-                          itemBuilder: (BuildContext context, int index, Animation<double> animation) {
+                        child: ListView.builder(
+                          itemCount: results.length,
+                          itemBuilder: (BuildContext context, int index) {
                             Message message = results[index]['message'];
                             Chat? chat = results[index]['chat'];
 

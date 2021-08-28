@@ -149,7 +149,7 @@ class _ThemingColorOptionsListState extends State<ThemingColorOptionsList> {
                               editable = currentTheme != null && !currentTheme!.isPreset;
                               setState(() {});
 
-                              EventDispatcher().emit('theme-update', null);
+                              EventDispatcher.instance.emit('theme-update', null);
                             },
                             value: currentTheme,
                             hint: Text(

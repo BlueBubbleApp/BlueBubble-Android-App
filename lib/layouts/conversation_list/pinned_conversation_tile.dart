@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:assorted_layout_widgets/assorted_layout_widgets.dart';
 import 'package:bluebubbles/blocs/chat_bloc.dart';
-import 'package:bluebubbles/helpers/socket_singletons.dart';
 import 'package:bluebubbles/helpers/utils.dart';
 import 'package:bluebubbles/layouts/conversation_list/pinned_tile_text_bubble.dart';
 import 'package:bluebubbles/layouts/conversation_view/conversation_view.dart';
@@ -12,10 +11,8 @@ import 'package:bluebubbles/layouts/widgets/message_widget/reactions_widget.dart
 import 'package:bluebubbles/layouts/widgets/message_widget/typing_indicator.dart';
 import 'package:bluebubbles/layouts/widgets/theme_switcher/theme_switcher.dart';
 import 'package:bluebubbles/managers/current_chat.dart';
-import 'package:bluebubbles/managers/new_message_manager.dart';
 import 'package:bluebubbles/managers/settings_manager.dart';
 import 'package:bluebubbles/repository/models/chat.dart';
-import 'package:bluebubbles/repository/models/handle.dart';
 import 'package:bluebubbles/repository/models/message.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
@@ -41,71 +38,14 @@ class PinnedConversationTile extends StatefulWidget {
 }
 
 class _PinnedConversationTileState extends State<PinnedConversationTile> with AutomaticKeepAliveClientMixin {
-  bool isFetching = false;
-  Brightness? brightness;
-  Color? previousBackgroundColor;
-  bool gotBrightness = false;
-
-  // Typing indicator
-  RxBool showTypingIndicator = false.obs;
-
-  void loadBrightness() {
-    Color now = context.theme.backgroundColor;
-    bool themeChanged = previousBackgroundColor == null || previousBackgroundColor != now;
-    if (!themeChanged && gotBrightness) return;
-
-    previousBackgroundColor = now;
-
-    bool isDark = now.computeLuminance() < 0.179;
-    brightness = isDark ? Brightness.dark : Brightness.light;
-    gotBrightness = true;
-    if (this.mounted) setState(() {});
-  }
 
   @override
   void initState() {
     super.initState();
     fetchParticipants();
-    // Listen for changes in the group
-    NewMessageManager().stream.listen((NewMessageEvent event) async {
-      // Make sure we have the required data to qualify for this tile
-      if (event.chatGuid != widget.chat.guid) return;
-      if (!event.event.containsKey("message")) return;
-      if (widget.chat.guid == null) return;
-      // Make sure the message is a group event
-      Message message = event.event["message"];
-      if (!message.isGroupEvent()) return;
-
-      // If it's a group event, let's fetch the new information and save it
-      try {
-        await fetchChatSingleton(widget.chat.guid!);
-      } catch (ex) {
-        debugPrint(ex.toString());
-      }
-
-      this.setNewChatData(forceUpdate: true);
-    });
-  }
-
-  void setNewChatData({forceUpdate: false}) async {
-    // Save the current participant list and get the latest
-    List<Handle> ogParticipants = widget.chat.participants;
-    await widget.chat.getParticipants();
-
-    // Save the current title and generate the new one
-    String? ogTitle = widget.chat.title;
-    await widget.chat.getTitle();
-
-    // If the original data is different, update the state
-    if (ogTitle != widget.chat.title || ogParticipants.length != widget.chat.participants.length || forceUpdate) {
-      if (this.mounted) setState(() {});
-    }
   }
 
   Future<void> fetchParticipants() async {
-    if (isFetching) return;
-    isFetching = true;
-
     // If our chat does not have any participants, get them
     if (isNullOrEmpty(widget.chat.participants)!) {
       await widget.chat.getParticipants();
@@ -113,8 +53,6 @@ class _PinnedConversationTileState extends State<PinnedConversationTile> with Au
         setState(() {});
       }
     }
-
-    isFetching = false;
   }
 
   void onTapUp(details) {
@@ -410,15 +348,14 @@ class _PinnedConversationTileState extends State<PinnedConversationTile> with Au
                       ),
                     ],
                   ),
-                  StreamBuilder<Map<String, dynamic>>(
-                    stream: CurrentChat.getCurrentChat(widget.chat)?.stream as Stream<Map<String, dynamic>>?,
-                    builder: (BuildContext context, AsyncSnapshot snapshot) {
-                      if (snapshot.connectionState == ConnectionState.active &&
-                          snapshot.hasData &&
-                          snapshot.data["type"] == CurrentChatEvent.TypingStatus) {
-                        showTypingIndicator.value = snapshot.data["data"];
-                      }
-                      if (showTypingIndicator.value) {
+                  GetBuilder<CurrentChat>(
+                    init: CurrentChat(
+                    chat: widget.chat,
+                    ),
+                    autoRemove: false,
+                    tag: widget.chat.guid,
+                    builder: (controller) {
+                      if (controller.showTypingIndicator.value) {
                         return Positioned(
                           top: -11,
                           right: -13,
@@ -439,7 +376,7 @@ class _PinnedConversationTileState extends State<PinnedConversationTile> with Au
                     future: widget.chat.latestMessage,
                     builder: (BuildContext context, AsyncSnapshot snapshot) {
                       if (!(widget.chat.hasUnreadMessage ?? false)) return Container();
-                      if (showTypingIndicator.value) return Container();
+                      if (CurrentChat.forGuid(widget.chat.guid!)?.showTypingIndicator.value ?? false) return Container();
                       if (!snapshot.hasData) return Container();
                       Message message = snapshot.data;
                       if ([null, ""].contains(message.associatedMessageGuid) || (message.isFromMe ?? false)) {

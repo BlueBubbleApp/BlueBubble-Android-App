@@ -1,6 +1,7 @@
 import 'package:bluebubbles/helpers/reaction.dart';
 import 'package:bluebubbles/managers/settings_manager.dart';
 import 'package:bluebubbles/repository/models/message.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
 class ReactionsWidget extends StatefulWidget {
@@ -19,7 +20,6 @@ class ReactionsWidget extends StatefulWidget {
 class _ReactionsWidgetState extends State<ReactionsWidget> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
-    Map<String, Reaction> reactionsMap = new Map();
     // Filter associated messages down to just the sticker
     List<Message> reactions =
         widget.associatedMessages.where((item) => ReactionTypes.toList().contains(item.associatedMessageType)).toList();
@@ -33,36 +33,23 @@ class _ReactionsWidgetState extends State<ReactionsWidget> with TickerProviderSt
     }
 
     // Filter down the reactions by the newest for each user
-    reactionsMap = Reaction.getLatestReactionMap(reactions);
+    final reactionsMap = Reaction.getLatestReactionMap(reactions);
+
+    reactionsMap.removeWhere((key, value) => value.getSmallWidget(context, bigPin: widget.bigPin) == null);
 
     // Build the widget list from the map
-    List<Widget> reactionWidgets = [];
-    int tmpIdx = 0;
-    reactionsMap.forEach((String reactionType, Reaction item) {
-      Widget? itemWidget = item.getSmallWidget(
+    final reactionWidgets = reactionsMap.values.mapIndexed((int index, Reaction item) => Padding(
+      padding: EdgeInsets.fromLTRB(
+        index.toDouble() * 15.0,
+        1.0,
+        0,
+        0,
+      ),
+      child: item.getSmallWidget(
         context,
         bigPin: widget.bigPin,
-      );
-      if (itemWidget != null) {
-        reactionWidgets.add(
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              tmpIdx.toDouble() * 15.0,
-              1.0,
-              0,
-              0,
-            ),
-            child: itemWidget,
-          ),
-        );
-        tmpIdx++;
-      }
-    });
-
-    // This is a workaround for a flutter bug
-    if (reactionWidgets.length == 1) {
-      reactionWidgets.add(Text(''));
-    }
+      ),
+    )).toList();
 
     // Build the actual reaction bubbles
     return AnimatedSize(

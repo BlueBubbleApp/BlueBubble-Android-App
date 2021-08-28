@@ -148,8 +148,8 @@ bool sameAddress(List<String?> options, String? compared) {
 
 String getInitials(Contact contact) {
   // Set default initials
-  String initials = (contact.givenName!.isNotEmpty == true ? contact.givenName![0] : "") +
-      (contact.familyName!.isNotEmpty == true ? contact.familyName![0] : "");
+  String initials = ((contact.givenName ?? "").isNotEmpty == true ? contact.givenName![0] : "") +
+      ((contact.familyName ?? "").isNotEmpty == true ? contact.familyName![0] : "");
 
   // If the initials are empty, get them from the display name
   if (initials.trim().isEmpty) {

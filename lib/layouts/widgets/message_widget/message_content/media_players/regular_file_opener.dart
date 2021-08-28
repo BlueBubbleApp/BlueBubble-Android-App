@@ -8,7 +8,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart';
 
-class RegularFileOpener extends StatefulWidget {
+class RegularFileOpener extends StatelessWidget {
   RegularFileOpener({
     Key? key,
     required this.attachment,
@@ -18,13 +18,8 @@ class RegularFileOpener extends StatefulWidget {
   final File file;
 
   @override
-  _RegularFileOpenerState createState() => _RegularFileOpenerState();
-}
-
-class _RegularFileOpenerState extends State<RegularFileOpener> {
-  @override
   Widget build(BuildContext context) {
-    IconData fileIcon = AttachmentHelper.getIcon(widget.attachment.mimeType ?? "");
+    IconData fileIcon = AttachmentHelper.getIcon(attachment.mimeType ?? "");
 
     return GestureDetector(
       onTap: () async {
@@ -32,8 +27,8 @@ class _RegularFileOpenerState extends State<RegularFileOpener> {
           await MethodChannelInterface().invokeMethod(
             "open_file",
             {
-              "path": "/attachments/" + widget.attachment.guid! + "/" + basename(widget.file.path),
-              "mimeType": widget.attachment.mimeType,
+              "path": "/attachments/" + attachment.guid! + "/" + basename(file.path),
+              "mimeType": attachment.mimeType,
             },
           );
         } catch (ex) {
@@ -48,7 +43,7 @@ class _RegularFileOpenerState extends State<RegularFileOpener> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             Text(
-              basename(widget.file.path),
+              basename(file.path),
               textAlign: TextAlign.center,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
@@ -61,7 +56,7 @@ class _RegularFileOpenerState extends State<RegularFileOpener> {
                 color: Theme.of(context).textTheme.bodyText2!.color,
               ),
             ),
-            Text(widget.attachment.mimeType!, style: Theme.of(context).textTheme.bodyText2),
+            Text(attachment.mimeType!, style: Theme.of(context).textTheme.bodyText2),
           ],
         ),
       ),

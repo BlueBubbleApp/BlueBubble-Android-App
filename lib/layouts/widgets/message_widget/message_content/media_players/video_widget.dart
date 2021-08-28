@@ -10,6 +10,7 @@ import 'package:bluebubbles/repository/models/attachment.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:tuple/tuple.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
@@ -36,12 +37,12 @@ class VideoWidgetController extends GetxController with SingleGetTickerProviderM
   void onInit() {
     super.onInit();
     muted.value = SettingsManager().settings.startVideosMuted.value;
-    Map<String, VideoPlayerController> controllers = CurrentChat.of(context)!.currentPlayingVideo;
+    Tuple2<String, VideoPlayerController>? controllerTuple = CurrentChat.of(context)!.currentPlayingVideo;
     showPlayPauseOverlay.value =
-        !controllers.containsKey(attachment.guid) || !controllers[attachment.guid]!.value.isPlaying;
+        controllerTuple?.item1 != attachment.guid || !(controllerTuple?.item2.value.isPlaying ?? false);
 
-    if (controllers.containsKey(attachment.guid)) {
-      controller = controllers[attachment.guid]!;
+    if (controllerTuple?.item1 == attachment.guid) {
+      controller = controllerTuple!.item2;
     } else {
       initializeController();
     }
@@ -52,7 +53,7 @@ class VideoWidgetController extends GetxController with SingleGetTickerProviderM
     VideoPlayerController vpc = VideoPlayerController.file(file);
     controller = vpc;
     await vpc.initialize();
-    CurrentChat.of(context)!.changeCurrentPlayingVideo({attachment.guid!: vpc});
+    CurrentChat.of(context)!.changeCurrentPlayingVideo(attachment.guid!, vpc);
   }
 
   void createListener(VideoPlayerController controller) {

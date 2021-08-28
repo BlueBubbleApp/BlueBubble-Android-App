@@ -6,7 +6,10 @@ import 'package:bluebubbles/repository/models/message.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-class DeliveredReceipt extends StatefulWidget {
+// Placeholder class so we can get vsync support in the stateless widget
+class DeliveredReceiptController extends GetxController with SingleGetTickerProviderMixin {}
+
+class DeliveredReceipt extends StatelessWidget {
   DeliveredReceipt({
     Key? key,
     required this.message,
@@ -16,15 +19,11 @@ class DeliveredReceipt extends StatefulWidget {
   final bool showDeliveredReceipt;
   final bool shouldAnimate;
   final Message message;
+  final DeliveredReceiptController controller = DeliveredReceiptController();
 
-  @override
-  _DeliveredReceiptState createState() => _DeliveredReceiptState();
-}
-
-class _DeliveredReceiptState extends State<DeliveredReceipt> with TickerProviderStateMixin {
-  bool shouldShow(Message? myLastMessage, Message? lastReadMessage, Message? lastDeliveredMessage) {
+  bool shouldShow(BuildContext context, Message? myLastMessage, Message? lastReadMessage, Message? lastDeliveredMessage) {
     // If we have no delivered date, don't show anything
-    if (widget.message.dateDelivered == null) return false;
+    if (message.dateDelivered == null) return false;
 
     if (CurrentChat.of(context) != null) {
       if (lastReadMessage == null) lastReadMessage = CurrentChat.of(context)?.messageMarkers.lastReadMessage;
@@ -34,18 +33,18 @@ class _DeliveredReceiptState extends State<DeliveredReceipt> with TickerProvider
     }
 
     // If the message is the same as the last read message, we want to show it
-    if (!widget.showDeliveredReceipt &&
-        widget.message.dateRead != null &&
+    if (!showDeliveredReceipt &&
+        message.dateRead != null &&
         lastReadMessage != null &&
-        widget.message.guid == lastReadMessage.guid) {
+        message.guid == lastReadMessage.guid) {
       return true;
     }
 
     // If the message is the same as the last delivered message, we want to show it
-    if (!widget.showDeliveredReceipt &&
-        widget.message.dateDelivered != null &&
+    if (!showDeliveredReceipt &&
+        message.dateDelivered != null &&
         lastDeliveredMessage != null &&
-        widget.message.guid == lastDeliveredMessage.guid) {
+        message.guid == lastDeliveredMessage.guid) {
       return true;
     }
 
@@ -63,15 +62,15 @@ class _DeliveredReceiptState extends State<DeliveredReceipt> with TickerProvider
     // }
 
     // If all else fails, return what our parent wants
-    return widget.showDeliveredReceipt;
+    return showDeliveredReceipt;
   }
 
   String getText() {
     String text = "Delivered";
-    if (widget.message.dateRead != null) {
-      text = "Read " + buildDate(widget.message.dateRead);
-    } else if (SettingsManager().settings.showDeliveryTimestamps.value && widget.message.dateDelivered != null) {
-      text = "Delivered " + buildDate(widget.message.dateDelivered);
+    if (message.dateRead != null) {
+      text = "Read " + buildDate(message.dateRead);
+    } else if (SettingsManager().settings.showDeliveryTimestamps.value && message.dateDelivered != null) {
+      text = "Delivered " + buildDate(message.dateDelivered);
     }
 
     return text;
@@ -83,7 +82,7 @@ class _DeliveredReceiptState extends State<DeliveredReceipt> with TickerProvider
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: Obx(() {
         MessageMarkers? markers = CurrentChat.of(context)?.messageMarkers.markers.value ?? null.obs.value;
-        if (shouldShow(markers?.myLastMessage, markers?.lastReadMessage, markers?.lastDeliveredMessage)) {
+        if (shouldShow(context, markers?.myLastMessage, markers?.lastReadMessage, markers?.lastDeliveredMessage)) {
           return Text(
             getText(),
             style: Theme.of(context).textTheme.subtitle2,
@@ -95,9 +94,9 @@ class _DeliveredReceiptState extends State<DeliveredReceipt> with TickerProvider
     );
 
     Widget item;
-    if (widget.shouldAnimate) {
+    if (shouldAnimate) {
       item = AnimatedSize(
-          vsync: this,
+          vsync: controller,
           curve: Curves.easeInOut,
           alignment: Alignment.bottomLeft,
           duration: Duration(milliseconds: 250),

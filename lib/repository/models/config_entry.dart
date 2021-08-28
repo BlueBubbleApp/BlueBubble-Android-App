@@ -79,22 +79,15 @@ class ConfigEntry<T> {
 
   Future<ConfigEntry> update(String table, {Database? database}) async {
     final Database? db = database != null ? database : await DBProvider.db.database;
-
-    // If it already exists, update it
-    if (this.id != null) {
-      await db!.update(
-          table,
-          {
-            "name": this.name,
-            "value": DBConverter.getString(value),
-            "type": DBConverter.getStringType(type),
-          },
-          where: "ROWID = ?",
-          whereArgs: [this.id]);
-    } else {
-      await this.save(table, updateIfAbsent: false, database: database);
-    }
-
+    await db!.update(
+        table,
+        {
+          "name": this.name,
+          "value": DBConverter.getString(value),
+          "type": DBConverter.getStringType(type),
+        },
+        where: "ROWID = ?",
+        whereArgs: [this.id]);
     return this;
   }
 

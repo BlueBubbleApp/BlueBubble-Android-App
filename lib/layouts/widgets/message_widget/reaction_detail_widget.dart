@@ -28,11 +28,6 @@ class _ReactionDetailWidgetState extends State<ReactionDetailWidget> {
     super.initState();
 
     contactTitle = widget.message.isFromMe! ? "You" : widget.handle!.address;
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
     if (widget.message.isFromMe! || widget.handle == null) return;
 
     ContactManager().getContactTitle(widget.handle).then((String? title) {

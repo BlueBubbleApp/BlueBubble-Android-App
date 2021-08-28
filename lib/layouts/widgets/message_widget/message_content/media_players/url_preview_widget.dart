@@ -49,7 +49,7 @@ class UrlPreviewController extends GetxController with SingleGetTickerProviderMi
 
   Future<void> fetchPreview() async {
     // Try to get any already loaded attachment data
-    if (CurrentChat.of(context)!.urlPreviews.containsKey(message.text)) {
+    if (CurrentChat.of(context) != null && CurrentChat.of(context)!.urlPreviews.containsKey(message.text)) {
       data.value = CurrentChat.of(context)!.urlPreviews[message.text];
     }
 

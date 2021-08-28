@@ -69,7 +69,7 @@ class _ConversationListState extends State<ConversationList> {
     scrollController = ScrollController()..addListener(scrollListener);
 
     // Listen for any incoming events
-    EventDispatcher().stream.listen((Map<String, dynamic> event) {
+    EventDispatcher.instance.stream.listen((Map<String, dynamic> event) {
       if (!event.containsKey("type")) return;
 
       if (event["type"] == 'refresh' && this.mounted) {
@@ -967,7 +967,7 @@ class __MaterialState extends State<_Material> {
                                       .chats
                                       .archivedHelper(showArchived)[index]
                                       .togglePin(!ChatBloc().chats.archivedHelper(showArchived)[index].isPinned!);
-                                  EventDispatcher().emit("refresh", null);
+                                  EventDispatcher.instance.emit("refresh", null);
                                   if (this.mounted) setState(() {});
                                 } else if (SettingsManager().settings.materialLeftAction.value ==
                                     MaterialSwipeAction.alerts) {
@@ -997,7 +997,7 @@ class __MaterialState extends State<_Material> {
                                       .chats
                                       .archivedHelper(showArchived)[index]
                                       .togglePin(!ChatBloc().chats.archivedHelper(showArchived)[index].isPinned!);
-                                  EventDispatcher().emit("refresh", null);
+                                  EventDispatcher.instance.emit("refresh", null);
                                   if (this.mounted) setState(() {});
                                 } else if (SettingsManager().settings.materialRightAction.value ==
                                     MaterialSwipeAction.alerts) {
@@ -1473,7 +1473,7 @@ class _SamsungState extends State<_Samsung> {
                                             .chats
                                             .archivedHelper(showArchived)[index]
                                             .togglePin(!ChatBloc().chats.archivedHelper(showArchived)[index].isPinned!);
-                                        EventDispatcher().emit("refresh", null);
+                                        EventDispatcher.instance.emit("refresh", null);
                                         if (this.mounted) setState(() {});
                                       } else if (SettingsManager().settings.materialLeftAction.value ==
                                           MaterialSwipeAction.alerts) {
@@ -1506,7 +1506,7 @@ class _SamsungState extends State<_Samsung> {
                                             .chats
                                             .archivedHelper(showArchived)[index]
                                             .togglePin(!ChatBloc().chats.archivedHelper(showArchived)[index].isPinned!);
-                                        EventDispatcher().emit("refresh", null);
+                                        EventDispatcher.instance.emit("refresh", null);
                                         if (this.mounted) setState(() {});
                                       } else if (SettingsManager().settings.materialRightAction.value ==
                                           MaterialSwipeAction.alerts) {
@@ -1636,7 +1636,7 @@ class _SamsungState extends State<_Samsung> {
                                             .chats
                                             .archivedHelper(showArchived)[index]
                                             .togglePin(!ChatBloc().chats.archivedHelper(showArchived)[index].isPinned!);
-                                        EventDispatcher().emit("refresh", null);
+                                        EventDispatcher.instance.emit("refresh", null);
                                         if (this.mounted) setState(() {});
                                       } else if (SettingsManager().settings.materialLeftAction.value ==
                                           MaterialSwipeAction.alerts) {
@@ -1669,7 +1669,7 @@ class _SamsungState extends State<_Samsung> {
                                             .chats
                                             .archivedHelper(showArchived)[index]
                                             .togglePin(!ChatBloc().chats.archivedHelper(showArchived)[index].isPinned!);
-                                        EventDispatcher().emit("refresh", null);
+                                        EventDispatcher.instance.emit("refresh", null);
                                         if (this.mounted) setState(() {});
                                       } else if (SettingsManager().settings.materialRightAction.value ==
                                           MaterialSwipeAction.alerts) {

@@ -2,6 +2,7 @@ import 'package:bluebubbles/helpers/constants.dart';
 import 'package:bluebubbles/helpers/hex_color.dart';
 import 'package:bluebubbles/helpers/message_helper.dart';
 import 'package:bluebubbles/helpers/redacted_helper.dart';
+import 'package:bluebubbles/helpers/ui_helpers.dart';
 import 'package:bluebubbles/helpers/utils.dart';
 import 'package:bluebubbles/layouts/setup/theme_selector/theme_selector.dart';
 import 'package:bluebubbles/layouts/widgets/contact_avatar_widget.dart';
@@ -17,12 +18,13 @@ import 'package:bluebubbles/repository/models/message.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-class ReceivedMessage extends StatefulWidget {
+class ReceivedMessage extends StatelessWidget {
   final bool showTail;
   final Message message;
   final Message? olderMessage;
   final Message? newerMessage;
   final bool showHandle;
+  final Rx<Skins> skin = Rx<Skins>(SettingsManager().settings.skin.value);
 
   // Sub-widgets
   final Widget stickersWidget;
@@ -45,49 +47,8 @@ class ReceivedMessage extends StatefulWidget {
     required this.urlPreviewWidget,
   }) : super(key: key);
 
-  @override
-  _ReceivedMessageState createState() => _ReceivedMessageState();
-}
-
-class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMixin {
-  bool checkedHandle = false;
-  final Rx<Skins> skin = Rx<Skins>(SettingsManager().settings.skin.value);
-
-  @override
-  initState() {
-    super.initState();
-    initMessageState(widget.message, widget.showHandle).then((value) => {if (this.mounted) setState(() {})});
-
-    // We need this here, or else messages without an avatar may not change.
-    // Even if it fits the criteria
-    ContactManager().colorStream.listen((event) {
-      if (!event.containsKey(widget.message.handle?.address)) return;
-
-      Color? color = event[widget.message.handle?.address];
-      if (color == null) {
-        widget.message.handle!.color = null;
-      } else {
-        widget.message.handle!.color = color.value.toRadixString(16);
-      }
-
-      if (this.mounted) setState(() {});
-    });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    didChangeMessageDependencies(widget.message, widget.showHandle);
-  }
-
-  Future<void> didChangeMessageDependencies(Message message, bool? showHandle) async {
-    await getContactTitle(message, showHandle);
-    // await fetchAvatar(message);
-    if (this.mounted) setState(() {});
-  }
-
   /// Builds the message bubble with teh tail (if applicable)
-  Widget _buildMessageWithTail(Message message) {
+  Widget _buildMessageWithTail(BuildContext context, Message message) {
     if (message.isBigEmoji()) {
       final bool hideContent =
           SettingsManager().settings.redactedMode.value && SettingsManager().settings.hideEmojis.value;
@@ -97,7 +58,7 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
         padding: EdgeInsets.only(
           left: CurrentChat.of(context)!.chat.participants.length > 1 ? 5.0 : 0.0,
           right: (hasReactions) ? 15.0 : 0.0,
-          top: widget.message.getReactions().length > 0 ? 15 : 0,
+          top: message.getReactions().length > 0 ? 15 : 0,
         ),
         child: hideContent
             ? ClipRRect(
@@ -136,23 +97,23 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
     return Stack(
       alignment: AlignmentDirectional.bottomStart,
       children: [
-        if (widget.showTail && skin.value == Skins.iOS)
+        if (showTail && skin.value == Skins.iOS)
           MessageTail(
             isFromMe: false,
             color: bubbleColors[0],
           ),
         Container(
           margin: EdgeInsets.only(
-            top: widget.message.getReactions().length > 0 && !widget.message.hasAttachments
+            top: message.getReactions().length > 0 && !message.hasAttachments
                 ? 18
-                : (widget.message.isFromMe != widget.olderMessage?.isFromMe)
+                : (message.isFromMe != olderMessage?.isFromMe)
                     ? 5.0
                     : 0,
             left: 10,
             right: 10,
           ),
           constraints: BoxConstraints(
-            maxWidth: context.width * MessageWidgetMixin.MAX_SIZE,
+            maxWidth: context.width * MessageWidgetHelper.MAX_SIZE,
           ),
           padding: EdgeInsets.symmetric(
             vertical: 8,
@@ -168,13 +129,13 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
                   )
                 : (skin.value == Skins.Material)
                     ? BorderRadius.only(
-                        topLeft: widget.olderMessage == null ||
-                                MessageHelper.getShowTail(context, widget.olderMessage, widget.message)
+                        topLeft: olderMessage == null ||
+                                MessageHelper.getShowTail(context, olderMessage, message)
                             ? Radius.circular(20)
                             : Radius.circular(5),
                         topRight: Radius.circular(20),
                         bottomRight: Radius.circular(20),
-                        bottomLeft: Radius.circular(widget.showTail ? 20 : 5),
+                        bottomLeft: Radius.circular(showTail ? 20 : 5),
                       )
                     : (skin.value == Skins.Samsung)
                         ? BorderRadius.only(
@@ -192,8 +153,8 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
           ),
           child: RichText(
             text: TextSpan(
-              children: MessageWidgetMixin.buildMessageSpans(context, widget.message,
-                  colors: widget.message.handle?.color != null ? bubbleColors : null),
+              children: MessageWidgetHelper.buildMessageSpans(context, message,
+                  colors: message.handle?.color != null ? bubbleColors : null),
               style: Theme.of(context).textTheme.bodyText2,
             ),
           ),
@@ -215,70 +176,73 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
     bool addedSender = false;
     bool showSender = SettingsManager().settings.alwaysShowAvatars.value ||
         isGroup ||
-        widget.message.guid == "redacted-mode-demo" ||
-        widget.message.guid!.contains("theme-selector");
-    if (widget.message.guid == "redacted-mode-demo" ||
-        widget.message.guid!.contains("theme-selector") ||
+        message.guid == "redacted-mode-demo" ||
+        message.guid!.contains("theme-selector");
+    if (message.guid == "redacted-mode-demo" ||
+        message.guid!.contains("theme-selector") ||
         (isGroup &&
-            (!sameSender(widget.message, widget.olderMessage) ||
-                !widget.message.dateCreated!.isWithin(widget.olderMessage!.dateCreated!, minutes: 30)))) {
+            (!sameSender(message, olderMessage) ||
+                !message.dateCreated!.isWithin(olderMessage!.dateCreated!, minutes: 30)))) {
       messageColumn.add(
         Padding(
-          padding: EdgeInsets.only(left: 15.0, top: 5.0, bottom: widget.message.getReactions().length > 0 ? 0.0 : 3.0),
-          child: Text(getContactName(context, contactTitle, widget.message.handle!.address),
-              style: Theme.of(context).textTheme.subtitle1, maxLines: 1, overflow: TextOverflow.ellipsis,),
+          padding: EdgeInsets.only(left: 15.0, top: 5.0, bottom: message.getReactions().length > 0 ? 0.0 : 3.0),
+          child: FutureBuilder<String?>(
+            future: ContactManager().getContactTitle(message.handle),
+            builder: (context, snapshot) => Text(getContactName(context, snapshot.data, message.handle!.address),
+              style: Theme.of(context).textTheme.subtitle1, maxLines: 1, overflow: TextOverflow.ellipsis,)
+          ),
         ),
       );
       addedSender = true;
     }
 
     // Second, add the attachments
-    if (widget.message.getRealAttachments().length > 0) {
+    if (message.getRealAttachments().length > 0) {
       messageColumn.add(
         addStickersToWidget(
           message: addReactionsToWidget(
-              messageWidget: widget.attachmentsWidget,
-              reactions: widget.reactionsWidget,
-              message: widget.message,
-              shouldShow: widget.message.hasAttachments),
-          stickers: widget.stickersWidget,
-          isFromMe: widget.message.isFromMe!,
+              messageWidget: attachmentsWidget,
+              reactions: reactionsWidget,
+              message: message,
+              shouldShow: message.hasAttachments),
+          stickers: stickersWidget,
+          isFromMe: message.isFromMe!,
         ),
       );
     }
 
     // Third, let's add the actual message we want to show
-    Widget? message;
-    if (widget.message.isInteractive()) {
-      message = Padding(padding: EdgeInsets.only(left: 10.0), child: BalloonBundleWidget(message: widget.message));
-    } else if (widget.message.hasText()) {
-      message = _buildMessageWithTail(widget.message);
-      if (widget.message.hasUrl()) {
-        message = Column(
+    Widget? messageWidget;
+    if (message.isInteractive()) {
+      messageWidget = Padding(padding: EdgeInsets.only(left: 10.0), child: BalloonBundleWidget(message: message));
+    } else if (message.hasText()) {
+      messageWidget = _buildMessageWithTail(context, message);
+      if (message.hasUrl()) {
+        messageWidget = Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
               padding: EdgeInsets.only(left: 10.0),
-              child: widget.urlPreviewWidget,
+              child: urlPreviewWidget,
             ),
-            message,
+            messageWidget,
           ]
         );
       }
     }
 
     // Fourth, let's add any reactions or stickers to the widget
-    if (message != null) {
+    if (messageWidget != null) {
       messageColumn.add(
         addStickersToWidget(
           message: addReactionsToWidget(
-              messageWidget: message,
-              reactions: widget.reactionsWidget,
-              message: widget.message,
-              shouldShow: widget.message.getRealAttachments().isEmpty),
-          stickers: widget.stickersWidget,
-          isFromMe: widget.message.isFromMe!,
+              messageWidget: messageWidget,
+              reactions: reactionsWidget,
+              message: message,
+              shouldShow: message.getRealAttachments().isEmpty),
+          stickers: stickersWidget,
+          isFromMe: message.isFromMe!,
         ),
       );
     }
@@ -286,9 +250,12 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
     List<Widget> messagePopupColumn = List<Widget>.from(messageColumn);
     if (!addedSender && isGroup) {
       messagePopupColumn.insert(0, Padding(
-        padding: EdgeInsets.only(left: 15.0, top: 5.0, bottom: widget.message.getReactions().length > 0 ? 0.0 : 3.0),
-        child: Text(getContactName(context, contactTitle, widget.message.handle!.address),
-            style: Theme.of(context).textTheme.subtitle1, maxLines: 1, overflow: TextOverflow.ellipsis,),
+        padding: EdgeInsets.only(left: 15.0, top: 5.0, bottom: message.getReactions().length > 0 ? 0.0 : 3.0),
+        child: FutureBuilder<String?>(
+          future: ContactManager().getContactTitle(message.handle),
+          builder: (context, snapshot) => Text(getContactName(context, snapshot.data, message.handle!.address),
+            style: Theme.of(context).textTheme.subtitle1, maxLines: 1, overflow: TextOverflow.ellipsis,)
+        ),
       ));
     }
 
@@ -297,19 +264,19 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
     // -> Message
     List<Widget> msgRow = [];
     bool addedAvatar = false;
-    if (widget.showTail && (showSender || skin.value == Skins.Samsung)) {
+    if (showTail && (showSender || skin.value == Skins.Samsung)) {
       double topPadding = (isGroup) ? 5 : 0;
       if (skin.value == Skins.Samsung) {
         topPadding = 5.0;
         if (showSender) topPadding += 18;
-        if (widget.message.hasReactions) topPadding += 20;
+        if (message.hasReactions) topPadding += 20;
       }
 
       msgRow.add(
         Padding(
           padding: EdgeInsets.only(left: 5.0, top: topPadding),
           child: ContactAvatarWidget(
-            handle: widget.message.handle,
+            handle: message.handle,
             size: 30,
             fontSize: 14,
             borderThickness: 0.1,
@@ -325,14 +292,14 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
       if (skin.value == Skins.Samsung) {
         topPadding = 5.0;
         if (showSender) topPadding += 18;
-        if (widget.message.hasReactions) topPadding += 20;
+        if (message.hasReactions) topPadding += 20;
       }
 
       msgPopupRow.add(
         Padding(
           padding: EdgeInsets.only(left: 5.0, top: topPadding),
           child: ContactAvatarWidget(
-            handle: widget.message.handle,
+            handle: message.handle,
             size: 30,
             fontSize: 14,
             borderThickness: 0.1,
@@ -345,7 +312,7 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
     msgRow.add(
       Padding(
         // Padding to shift the bubble up a bit, relative to the avatar
-        padding: EdgeInsets.only(bottom: widget.showTail ? 0.0 : 5.0),
+        padding: EdgeInsets.only(bottom: showTail ? 0.0 : 5.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,9 +337,9 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
     return Padding(
       // Add padding when we are showing the avatar
       padding: EdgeInsets.only(
-          top: (skin.value != Skins.iOS && widget.message.isFromMe == widget.olderMessage?.isFromMe) ? 3.0 : 0.0,
-          left: (!widget.showTail && (showSender || skin.value == Skins.Samsung)) ? 35.0 : 0.0,
-          bottom: (widget.showTail && skin.value == Skins.iOS) ? 10.0 : 0.0),
+          top: (skin.value != Skins.iOS && message.isFromMe == olderMessage?.isFromMe) ? 3.0 : 0.0,
+          left: (!showTail && (showSender || skin.value == Skins.Samsung)) ? 35.0 : 0.0,
+          bottom: (showTail && skin.value == Skins.iOS) ? 10.0 : 0.0),
       child: Row(
         mainAxisSize: MainAxisSize.max,
         mainAxisAlignment: (skin.value == Skins.iOS || skin.value == Skins.Material)
@@ -381,9 +348,9 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           MessagePopupHolder(
-              message: widget.message,
-              olderMessage: widget.olderMessage,
-              newerMessage: widget.newerMessage,
+              message: message,
+              olderMessage: olderMessage,
+              newerMessage: newerMessage,
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -393,15 +360,15 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
                 ),
                 // Add the timestamp for the samsung theme
                 if (skin.value == Skins.Samsung &&
-                    widget.message.dateCreated != null &&
-                    (widget.newerMessage?.dateCreated == null ||
-                        widget.message.isFromMe != widget.newerMessage?.isFromMe ||
-                        widget.message.handleId != widget.newerMessage?.handleId ||
-                        !widget.message.dateCreated!.isWithin(widget.newerMessage!.dateCreated!, minutes: 5)))
+                    message.dateCreated != null &&
+                    (newerMessage?.dateCreated == null ||
+                        message.isFromMe != newerMessage?.isFromMe ||
+                        message.handleId != newerMessage?.handleId ||
+                        !message.dateCreated!.isWithin(newerMessage!.dateCreated!, minutes: 5)))
                   Padding(
                     padding: EdgeInsets.only(top: 5, left: (isGroup) ? 60 : 20),
                     child: MessageTimeStamp(
-                      message: widget.message,
+                      message: message,
                       singleLine: true,
                       useYesterday: true,
                     ),
@@ -414,9 +381,9 @@ class _ReceivedMessageState extends State<ReceivedMessage> with MessageWidgetMix
               children: msgPopupRow,
             ),
           ),
-          if ((skin.value != Skins.Samsung && widget.message.guid != widget.olderMessage?.guid))
+          if ((skin.value != Skins.Samsung && message.guid != olderMessage?.guid))
             MessageTimeStamp(
-              message: widget.message,
+              message: message,
             )
         ],
       ),

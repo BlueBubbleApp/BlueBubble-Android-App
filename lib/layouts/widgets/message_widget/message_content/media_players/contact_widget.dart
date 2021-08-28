@@ -11,7 +11,7 @@ import 'package:contacts_service/contacts_service.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart';
 
-class ContactWidget extends StatefulWidget {
+class ContactWidget extends StatelessWidget {
   ContactWidget({
     Key? key,
     required this.file,
@@ -20,26 +20,14 @@ class ContactWidget extends StatefulWidget {
   final File file;
   final Attachment attachment;
 
-  @override
-  _ContactWidgetState createState() => _ContactWidgetState();
-}
-
-class _ContactWidgetState extends State<ContactWidget> {
-  late Contact contact;
-
-  @override
-  void initState() {
-    super.initState();
-
-    String appleContact = widget.file.readAsStringSync();
+  Contact getContact() {
+    String appleContact = file.readAsStringSync();
 
     try {
-      contact = AttachmentHelper.parseAppleContact(appleContact);
+      return AttachmentHelper.parseAppleContact(appleContact);
     } catch (ex) {
-      contact = new Contact(displayName: "Invalid Contact");
+      return new Contact(displayName: "Invalid Contact");
     }
-
-    if (this.mounted) setState(() {});
   }
 
   @override
@@ -56,7 +44,7 @@ class _ContactWidgetState extends State<ContactWidget> {
               MethodChannelInterface().invokeMethod(
                 "open_file",
                 {
-                  "path": "/attachments/" + widget.attachment.guid! + "/" + basename(widget.file.path),
+                  "path": "/attachments/" + attachment.guid! + "/" + basename(file.path),
                   "mimeType": "text/x-vcard",
                 },
               );
@@ -77,7 +65,7 @@ class _ContactWidgetState extends State<ContactWidget> {
                             style: Theme.of(context).textTheme.subtitle2,
                           ),
                           Text(
-                            contact.displayName ?? "No Name",
+                            getContact().displayName ?? "No Name",
                             style: Theme.of(context).textTheme.bodyText1,
                             overflow: TextOverflow.ellipsis,
                             maxLines: 2,
@@ -99,7 +87,7 @@ class _ContactWidgetState extends State<ContactWidget> {
                         ),
                         child: Container(
                           child: Text(
-                            getInitials(contact),
+                            getInitials(getContact()),
                             style: Theme.of(context).textTheme.headline1,
                           ),
                           alignment: AlignmentDirectional.center,

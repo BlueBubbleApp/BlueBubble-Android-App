@@ -11,6 +11,7 @@ import 'package:bluebubbles/layouts/widgets/message_widget/reactions_widget.dart
 import 'package:bluebubbles/layouts/widgets/message_widget/received_message.dart';
 import 'package:bluebubbles/layouts/widgets/message_widget/sent_message.dart';
 import 'package:bluebubbles/layouts/widgets/message_widget/stickers_widget.dart';
+import 'package:bluebubbles/managers/contact_manager.dart';
 import 'package:bluebubbles/managers/current_chat.dart';
 import 'package:bluebubbles/managers/new_message_manager.dart';
 import 'package:bluebubbles/managers/settings_manager.dart';
@@ -20,8 +21,157 @@ import 'package:bluebubbles/repository/models/message.dart';
 import 'package:bluebubbles/socket_manager.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
-class MessageWidget extends StatefulWidget {
+class MessageWidgetController extends GetxController {
+  Completer<void>? associatedMessageRequest;
+  Completer<void>? attachmentsRequest;
+  int lastRequestCount = -1;
+  int attachmentCount = 0;
+  int associatedCount = 0;
+  late final CurrentChat? currentChat;
+  late final StreamSubscription<NewMessageEvent> subscription;
+  Message message;
+  Message? newerMessage;
+  Message? olderMessage;
+
+  final BuildContext context;
+  final Function? onUpdate;
+  MessageWidgetController({
+    required this.context,
+    this.onUpdate,
+    required this.message,
+    this.newerMessage,
+    this.olderMessage,
+  });
+
+  @override
+  void onInit() {
+    currentChat = CurrentChat.of(context);
+
+    checkHandle();
+    fetchAssociatedMessages();
+    fetchAttachments();
+
+    // Listen for new messages
+    subscription = NewMessageManager().stream.listen((data) {
+      // If the message doesn't apply to this chat, ignore it
+      if (data.chatGuid != currentChat?.chat.guid) return;
+
+      if (data.type == NewMessageType.ADD) {
+        // Check if the new message has an associated GUID that matches this message
+        bool fetchAssoc = false;
+        bool fetchAttach = false;
+        Message? message = data.event["message"];
+        if (message == null) return;
+        if (message.associatedMessageGuid == message.guid) fetchAssoc = true;
+        if (message.hasAttachments) fetchAttach = true;
+
+        // If the associated message GUID matches this one, fetch associated messages
+        if (fetchAssoc) fetchAssociatedMessages();
+        if (fetchAttach) fetchAttachments();
+      } else if (data.type == NewMessageType.UPDATE) {
+        String? oldGuid = data.event["oldGuid"];
+        // If the guid does not match our current guid, then it's not meant for us
+        if (oldGuid != message.guid && oldGuid != newerMessage?.guid) return;
+
+        onUpdate?.call(data);
+
+        if (message.guid == oldGuid) {
+          message = data.event["message"];
+        } else if (newerMessage!.guid == oldGuid) {
+          newerMessage = data.event["message"];
+        }
+      }
+      update();
+    });
+
+    ContactManager().colorStream.listen((event) {
+      if (!event.containsKey(message.handle?.address)) return;
+
+      Color? color = event[message.handle?.address];
+      if (color == null) {
+        message.handle!.color = null;
+      } else {
+        message.handle!.color = color.value.toRadixString(16);
+      }
+
+      update();
+    });
+
+    super.onInit();
+  }
+
+  @override
+  void dispose() {
+    subscription.cancel();
+    super.dispose();
+  }
+
+  Future<void> checkHandle() async {
+    if (message.isFromMe! || message.handle != null) return;
+
+    await message.getHandle();
+  }
+
+  Future<void> fetchAssociatedMessages() async {
+    // If there is already a request being made, return that request
+    if (associatedMessageRequest != null) return associatedMessageRequest!.future;
+
+    // Create a new request and get the messages
+    associatedMessageRequest = new Completer();
+
+    try {
+      await message.fetchAssociatedMessages();
+    } catch (ex) {
+      return associatedMessageRequest!.completeError(ex);
+    }
+
+    // If we don't think there are reactions, and we found reactions,
+    // Update the DB so it saves that we have reactions
+    if (!message.hasReactions && message.getReactions().length > 0) {
+      message.hasReactions = true;
+      message.update();
+    }
+
+    if (message.associatedMessages.length != associatedCount) {
+      associatedCount = message.associatedMessages.length;
+    }
+
+    associatedMessageRequest!.complete();
+  }
+
+  Future<void> fetchAttachments() async {
+    // If there is already a request being made, return that request
+    if (attachmentsRequest != null) return attachmentsRequest!.future;
+
+    // Create a new request and get the attachments
+    attachmentsRequest = new Completer();
+
+    try {
+      await message.fetchAttachments(currentChat: currentChat);
+    } catch (ex) {
+      return attachmentsRequest!.completeError(ex);
+    }
+
+    // If this is a URL preview and we don't have attachments, we need to get them
+    List<Attachment?> nullAttachments = message.getPreviewAttachments();
+    if (message.hasUrl() && nullAttachments.isEmpty && lastRequestCount != nullAttachments.length) {
+      lastRequestCount = nullAttachments.length;
+
+      List<dynamic> msgs = (await SocketManager().getAttachments(currentChat!.chat.guid!, message.guid!)) ?? [];
+      for (var msg in msgs) await ActionHandler.handleMessage(msg, forceProcess: true);
+    }
+
+    if (message.attachments!.length != this.attachmentCount) {
+      this.attachmentCount = message.attachments!.length;
+    }
+
+    if (!attachmentsRequest!.isCompleted) attachmentsRequest!.complete();
+  }
+}
+
+class MessageWidget extends StatelessWidget {
   MessageWidget({
     Key? key,
     required this.message,
@@ -42,272 +192,97 @@ class MessageWidget extends StatefulWidget {
   final Message? Function(NewMessageEvent event)? onUpdate;
 
   @override
-  _MessageState createState() => _MessageState();
-}
-
-class _MessageState extends State<MessageWidget> with AutomaticKeepAliveClientMixin {
-  bool showTail = true;
-  Completer<void>? associatedMessageRequest;
-  Completer<void>? attachmentsRequest;
-  Completer<void>? handleRequest;
-  int lastRequestCount = -1;
-  int attachmentCount = 0;
-  int associatedCount = 0;
-  bool handledInit = false;
-  CurrentChat? currentChat;
-  StreamSubscription<NewMessageEvent>? subscription;
-  late Message _message;
-  Message? _newerMessage;
-  Message? _olderMessage;
-
-  @override
-  void initState() {
-    super.initState();
-    init();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    init();
-  }
-
-  void init() {
-    currentChat = CurrentChat.of(context);
-    if (handledInit) return;
-    handledInit = true;
-    _message = widget.message;
-    _newerMessage = widget.newerMessage;
-    _olderMessage = widget.olderMessage;
-
-    checkHandle();
-    fetchAssociatedMessages();
-    fetchAttachments();
-
-    // If we already are listening to the stream, no need to do it again
-    if (subscription != null) return;
-
-    // Listen for new messages
-    subscription = NewMessageManager().stream.listen((data) {
-      // If the message doesn't apply to this chat, ignore it
-      if (data.chatGuid != currentChat?.chat.guid) return;
-
-      if (data.type == NewMessageType.ADD) {
-        // Check if the new message has an associated GUID that matches this message
-        bool fetchAssoc = false;
-        bool fetchAttach = false;
-        Message? message = data.event["message"];
-        if (message == null) return;
-        if (message.associatedMessageGuid == widget.message.guid) fetchAssoc = true;
-        if (message.hasAttachments) fetchAttach = true;
-
-        // If the associated message GUID matches this one, fetch associated messages
-        if (fetchAssoc) fetchAssociatedMessages(forceReload: true);
-        if (fetchAttach) fetchAttachments(forceReload: true);
-      } else if (data.type == NewMessageType.UPDATE) {
-        String? oldGuid = data.event["oldGuid"];
-        // If the guid does not match our current guid, then it's not meant for us
-        if (oldGuid != _message.guid && oldGuid != _newerMessage?.guid) return;
-
-        // Tell the [MessagesView] to update with the new event, to ensure that things are done synchronously
-        if (widget.onUpdate != null) {
-          Message? result = widget.onUpdate!(data);
-          if (result != null) {
-            if (this.mounted)
-              setState(() {
-                if (_message.guid == oldGuid) {
-                  _message = result;
-                } else if (_newerMessage!.guid == oldGuid) {
-                  _newerMessage = result;
-                }
-              });
+  Widget build(BuildContext context) {
+    return GetBuilder<MessageWidgetController>(
+      init: MessageWidgetController(
+        context: context,
+        message: message,
+        olderMessage: olderMessage,
+        newerMessage: newerMessage,
+        onUpdate: onUpdate,
+      ),
+      global: false,
+      tag: message.guid!,
+      builder: (controller) {
+        bool showTail = true;
+        if (controller.newerMessage != null) {
+          if (controller.newerMessage!.isGroupEvent()) {
+            showTail = true;
+          } else if (SettingsManager().settings.skin.value == Skins.Samsung) {
+            showTail = MessageHelper.getShowTailReversed(context, controller.message, controller.olderMessage);
+          } else {
+            showTail = MessageHelper.getShowTail(context, controller.message, controller.newerMessage);
           }
         }
+
+        if (controller.message.isGroupEvent()) {
+          return GroupEvent(key: Key("group-event-${controller.message.guid}"), message: controller.message);
+        }
+
+        ////////// READ //////////
+        /// This widget and code below will handle building out the following:
+        /// -> Attachments
+        /// -> Reactions
+        /// -> Stickers
+        /// -> URL Previews
+        /// -> Big Emojis??
+        ////////// READ //////////
+
+        // Build the attachments widget
+        final widgetAttachments = MessageAttachments(
+          message: controller.message,
+          showTail: showTail,
+          showHandle: showHandle,
+        );
+
+        final urlPreviewWidget = UrlPreviewWidget(
+            key: new Key("preview-${controller.message.guid}"), linkPreviews: controller.message.getPreviewAttachments(), message: controller.message);
+        final stickersWidget =
+          StickersWidget(key: new Key("stickers-${controller.associatedCount.toString()}"), messages: controller.message.associatedMessages);
+        final reactionsWidget = ReactionsWidget(
+            key: new Key("reactions-${controller.associatedCount.toString()}"), associatedMessages: controller.message.associatedMessages);
+
+        // Add the correct type of message to the message stack
+        Widget message;
+        if (controller.message.isFromMe!) {
+          message = SentMessage(
+            showTail: showTail,
+            olderMessage: controller.olderMessage,
+            newerMessage: controller.newerMessage,
+            message: controller.message,
+            urlPreviewWidget: urlPreviewWidget,
+            stickersWidget: stickersWidget,
+            attachmentsWidget: widgetAttachments,
+            reactionsWidget: reactionsWidget,
+            shouldFadeIn: (controller.message.dateCreated?.difference(DateTime.now()).inSeconds ?? 0) <= 1,
+            showHero: showHero,
+            showDeliveredReceipt: isFirstSentMessage,
+          );
+        } else {
+          message = ReceivedMessage(
+            showTail: showTail,
+            olderMessage: controller.olderMessage,
+            newerMessage: controller.newerMessage,
+            message: controller.message,
+            showHandle: showHandle,
+            urlPreviewWidget: urlPreviewWidget,
+            stickersWidget: stickersWidget,
+            attachmentsWidget: widgetAttachments,
+            reactionsWidget: reactionsWidget,
+          );
+        }
+
+        return Column(
+          children: [
+            message,
+            if (SettingsManager().settings.skin.value != Skins.Samsung)
+              MessageTimeStampSeparator(
+                newerMessage: controller.newerMessage,
+                message: controller.message,
+              )
+          ],
+        );
       }
-    });
-  }
-
-  @override
-  void dispose() {
-    subscription?.cancel();
-    super.dispose();
-  }
-
-  Future<void> checkHandle() async {
-    // If we've already started, return the request
-    if (handleRequest != null) return handleRequest!.future;
-    handleRequest = new Completer();
-
-    // Checks ordered in a specific way to ever so slightly reduce processing
-    if (_message.isFromMe!) return handleRequest!.complete();
-    if (_message.handle != null) return handleRequest!.complete();
-
-    try {
-      Handle? handle = await _message.getHandle();
-      if (this.mounted && handle != null) {
-        setState(() {});
-      }
-    } catch (ex) {
-      handleRequest!.completeError(ex);
-    }
-  }
-
-  Future<void> fetchAssociatedMessages({bool forceReload = false}) async {
-    // If there is already a request being made, return that request
-    if (!forceReload && associatedMessageRequest != null) return associatedMessageRequest!.future;
-
-    // Create a new request and get the messages
-    associatedMessageRequest = new Completer();
-
-    try {
-      await _message.fetchAssociatedMessages();
-    } catch (ex) {
-      return associatedMessageRequest!.completeError(ex);
-    }
-
-    bool hasChanges = false;
-    if (_message.associatedMessages.length != associatedCount || forceReload) {
-      associatedCount = _message.associatedMessages.length;
-      hasChanges = true;
-    }
-
-    // If there are changes, re-render
-    if (hasChanges) {
-      // If we don't think there are reactions, and we found reactions,
-      // Update the DB so it saves that we have reactions
-      if (!_message.hasReactions && _message.getReactions().length > 0) {
-        _message.hasReactions = true;
-        _message.update();
-      }
-
-      if (this.mounted) setState(() {});
-    }
-
-    associatedMessageRequest!.complete();
-  }
-
-  Future<void> fetchAttachments({bool forceReload = false}) async {
-    // If there is already a request being made, return that request
-    if (!forceReload && attachmentsRequest != null) return attachmentsRequest!.future;
-
-    // Create a new request and get the attachments
-    attachmentsRequest = new Completer();
-    if (!this.mounted) return attachmentsRequest!.complete();
-
-    try {
-      await _message.fetchAttachments(currentChat: currentChat);
-    } catch (ex) {
-      return attachmentsRequest!.completeError(ex);
-    }
-
-    // If this is a URL preview and we don't have attachments, we need to get them
-    List<Attachment?> nullAttachments = _message.getPreviewAttachments();
-    if (_message.hasUrl() && nullAttachments.isEmpty) {
-      if (lastRequestCount != nullAttachments.length) {
-        lastRequestCount = nullAttachments.length;
-
-        List<dynamic> msgs = (await SocketManager().getAttachments(currentChat!.chat.guid!, _message.guid!)) ?? [];
-        for (var msg in msgs) await ActionHandler.handleMessage(msg, forceProcess: true);
-      }
-    }
-
-    bool hasChanges = false;
-    if (_message.attachments!.length != this.attachmentCount || forceReload) {
-      this.attachmentCount = _message.attachments!.length;
-      hasChanges = true;
-    }
-
-    // NOTE: Not sure if we need to re-render
-    if (this.mounted && hasChanges) {
-      setState(() {});
-    }
-
-    if (!attachmentsRequest!.isCompleted) attachmentsRequest!.complete();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-
-    if (_newerMessage != null) {
-      if (_newerMessage!.isGroupEvent()) {
-        showTail = true;
-      } else if (SettingsManager().settings.skin.value == Skins.Samsung) {
-        showTail = MessageHelper.getShowTailReversed(context, _message, _olderMessage);
-      } else {
-        showTail = MessageHelper.getShowTail(context, _message, _newerMessage);
-      }
-    }
-
-    if (_message.isGroupEvent()) {
-      return GroupEvent(key: Key("group-event-${_message.guid}"), message: _message);
-    }
-
-    ////////// READ //////////
-    /// This widget and code below will handle building out the following:
-    /// -> Attachments
-    /// -> Reactions
-    /// -> Stickers
-    /// -> URL Previews
-    /// -> Big Emojis??
-    ////////// READ //////////
-
-    // Build the attachments widget
-    Widget widgetAttachments = MessageAttachments(
-      message: _message,
-      showTail: showTail,
-      showHandle: widget.showHandle,
-    );
-
-    UrlPreviewWidget urlPreviewWidget = UrlPreviewWidget(
-        key: new Key("preview-${_message.guid}"), linkPreviews: _message.getPreviewAttachments(), message: _message);
-    StickersWidget stickersWidget =
-        StickersWidget(key: new Key("stickers-${associatedCount.toString()}"), messages: _message.associatedMessages);
-    ReactionsWidget reactionsWidget = ReactionsWidget(
-        key: new Key("reactions-${associatedCount.toString()}"), associatedMessages: _message.associatedMessages);
-
-    // Add the correct type of message to the message stack
-    Widget message;
-    if (_message.isFromMe!) {
-      message = SentMessage(
-        showTail: showTail,
-        olderMessage: widget.olderMessage,
-        newerMessage: widget.newerMessage,
-        message: _message,
-        urlPreviewWidget: urlPreviewWidget,
-        stickersWidget: stickersWidget,
-        attachmentsWidget: widgetAttachments,
-        reactionsWidget: reactionsWidget,
-        shouldFadeIn: currentChat?.sentMessages.contains(_message.guid) ?? false,
-        showHero: widget.showHero,
-        showDeliveredReceipt: widget.isFirstSentMessage,
-      );
-    } else {
-      message = ReceivedMessage(
-        showTail: showTail,
-        olderMessage: widget.olderMessage,
-        newerMessage: widget.newerMessage,
-        message: _message,
-        showHandle: widget.showHandle,
-        urlPreviewWidget: urlPreviewWidget,
-        stickersWidget: stickersWidget,
-        attachmentsWidget: widgetAttachments,
-        reactionsWidget: reactionsWidget,
-      );
-    }
-
-    return Column(
-      children: [
-        message,
-        if (SettingsManager().settings.skin.value != Skins.Samsung)
-          MessageTimeStampSeparator(
-            newerMessage: _newerMessage,
-            message: _message,
-          )
-      ],
     );
   }
-
-  @override
-  bool get wantKeepAlive => true;
 }

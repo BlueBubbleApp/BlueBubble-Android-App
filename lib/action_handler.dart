@@ -7,6 +7,7 @@ import 'package:bluebubbles/helpers/attachment_downloader.dart';
 import 'package:bluebubbles/helpers/attachment_helper.dart';
 import 'package:bluebubbles/helpers/attachment_sender.dart';
 import 'package:bluebubbles/helpers/constants.dart';
+import 'package:bluebubbles/helpers/logger.dart';
 import 'package:bluebubbles/helpers/message_helper.dart';
 import 'package:bluebubbles/helpers/utils.dart';
 import 'package:bluebubbles/managers/current_chat.dart';
@@ -53,21 +54,14 @@ class ActionHandler {
     // Generate a Temp GUID
     message.generateTempGuid();
 
-    // Make sure to save the chat
-    // If we already have the ID, we don't have to wait to resave it
-    if (chat.id == null) {
-      await chat.save();
-    } else {
-      chat.save();
-    }
-
     // Add the message to the UI and DB
     NewMessageManager().addMessage(chat, message, outgoing: true);
     chat.addMessage(message);
 
     // Create params for the queue item
     Map<String, dynamic> params = {"chat": chat, "message": message};
-
+    // Wait for the animation to finish before actually sending the message
+    await Future.delayed(Duration(milliseconds: 300));
     // Add the message send to the queue
     await OutgoingQueue().add(new QueueItem(event: "send-message", item: params));
   }
@@ -109,7 +103,7 @@ class ActionHandler {
             .replaceAll("temp", "error-Connection timeout, please check your internet connection and try again");
         message.error.value = MessageError.BAD_REQUEST.code;
         CurrentChat? currChat = CurrentChat.activeChat;
-        if (!LifeCycleManager().isAlive || currChat?.chat.guid != chat.guid) {
+        if (!LifeCycleManager.instance.isAlive || currChat?.chat.guid != chat.guid) {
           NotificationManager().createFailedToSendMessage();
         }
         await Message.replaceMessage(tempGuid, message);
@@ -415,6 +409,7 @@ class ActionHandler {
   static Future<void> handleMessage(Map<String, dynamic> data,
       {bool createAttachmentNotification = false, bool isHeadless = false, bool forceProcess = false}) async {
     Message message = Message.fromMap(data);
+    Logger.instance.log("${data['chats']}");
     List<Chat> chats = MessageHelper.parseChats(data);
 
     // Handle message differently depending on if there is a temp GUID match
@@ -449,7 +444,7 @@ class ActionHandler {
     } else if (forceProcess || !NotificationManager().hasProcessed(data["guid"])) {
       // Add the message to the chats
       for (int i = 0; i < chats.length; i++) {
-        debugPrint("Client received new message " + chats[i].guid!);
+        Logger.instance.log("Client received new message: " + chats[i].guid!);
 
         // Gets the chat from the chat bloc
         Chat? chat = await ChatBloc().getChat(chats[i].guid);
@@ -458,11 +453,13 @@ class ActionHandler {
           chat = chats[i];
         }
 
+        print(chat.toMap());
+
         await chat.getParticipants();
         // Handle the notification based on the message and chat
         await MessageHelper.handleNotification(message, chat);
 
-        debugPrint("(Message status) New message: [${message.text}] - [${message.guid}]");
+        Logger.instance.log("(Message status) New message: [${message.text}] - [${message.guid}]");
         await chat.addMessage(message);
 
         if (message.itemType == 2 && message.groupTitle != null) {
@@ -475,13 +472,9 @@ class ActionHandler {
       }
 
       // Add any related attachments
-      List<dynamic> attachments = data.containsKey("attachments") ? data['attachments'] : [];
-      for (var attachmentItem in attachments) {
-        Attachment file = Attachment.fromMap(attachmentItem);
-        await file.save(message);
-
-        if ((await AttachmentHelper.canAutoDownload()) && file.mimeType != null &&
-            !Get.find<AttachmentDownloadService>().downloaders.contains(file.guid)) {
+      for (Attachment? file in message.attachments ?? []) {
+        if ((await AttachmentHelper.canAutoDownload()) && file?.mimeType != null &&
+            !Get.find<AttachmentDownloadService>().downloaders.contains(file!.guid)) {
           Get.put(AttachmentDownloadController(attachment: file), tag: file.guid);
         }
       }

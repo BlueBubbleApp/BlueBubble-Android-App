@@ -41,10 +41,7 @@ class _AttachmentListItemState extends State<AttachmentListItem> {
       if (this.mounted) setState(() {});
     } else if (mimeType == null || mimeType.startsWith("image/")) {
       // Compress the file, using a dummy attachment object
-      preview = await AttachmentHelper.compressAttachment(
-          new Attachment(mimeType: mimeType, transferName: widget.file.absolute.path, width: 100, height: 100),
-          widget.file.absolute.path,
-          getActualPath: false);
+      preview = await File(widget.file.absolute.path).readAsBytes();
       if (this.mounted) setState(() {});
     }
   }

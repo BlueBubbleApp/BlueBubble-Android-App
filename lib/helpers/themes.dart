@@ -3,23 +3,16 @@ import 'package:bluebubbles/helpers/hex_color.dart';
 import 'package:bluebubbles/repository/models/theme_object.dart';
 import 'package:flutter/material.dart';
 
-enum DarkThemes {
-  OLED,
-  Nord,
-}
-
-enum LightThemes {
-  Bright_White,
-}
-
 class Themes {
+  /// List the default themes
   static List<ThemeObject> get themes => [
-        ThemeObject.fromData(oledDarkTheme, "OLED Dark", isPreset: true),
-        ThemeObject.fromData(whiteLightTheme, "Bright White", isPreset: true),
-        ThemeObject.fromData(nordDarkTheme, "Nord Theme", isPreset: true),
+        ThemeObject.fromData(oledDarkTheme, "OLED Dark"),
+        ThemeObject.fromData(whiteLightTheme, "Bright White"),
+        ThemeObject.fromData(nordDarkTheme, "Nord Theme"),
       ];
 }
 
+/// Rough check if 2 themes are equal by comparing [accentColor] and [backgroundColor]
 bool isEqual(ThemeData one, ThemeData two) {
   return one.accentColor == two.accentColor
       && one.backgroundColor == two.backgroundColor;
@@ -149,9 +142,8 @@ ThemeData whiteLightTheme = ThemeData(
   backgroundColor: Colors.white,
 );
 
-Future<void> loadTheme(BuildContext? context, {ThemeObject? lightOverride, ThemeObject? darkOverride}) async {
-  if (context == null) return;
-
+/// Set the current dark and light themes
+Future<void> loadTheme(BuildContext context, {ThemeObject? lightOverride, ThemeObject? darkOverride}) async {
   // Set the theme to match those of the settings
   ThemeObject light = lightOverride ?? await ThemeObject.getLightTheme();
   ThemeObject dark = darkOverride ?? await ThemeObject.getDarkTheme();

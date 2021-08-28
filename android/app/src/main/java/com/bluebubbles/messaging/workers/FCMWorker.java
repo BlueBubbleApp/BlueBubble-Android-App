@@ -128,7 +128,7 @@ public class FCMWorker extends Worker implements DartWorker {
             Log.d("BlueBubblesApp", "Setting MethodCall handler");
             handler = new Handler(Looper.getMainLooper());
             backgroundChannel = new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), CHANNEL);
-            backgroundChannel.setMethodCallHandler((call, result) -> MethodCallHandler.methodCallHandler(call, result, context, this));
+            backgroundChannel.setMethodCallHandler((call, result) -> MethodCallHandler.methodCallHandler(call, result, context, this, null));
         }
     }
 

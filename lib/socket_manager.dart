@@ -4,12 +4,10 @@ import 'dart:math';
 
 import 'package:bluebubbles/blocs/chat_bloc.dart';
 import 'package:bluebubbles/blocs/setup_bloc.dart';
-import 'package:bluebubbles/helpers/attachment_downloader.dart';
 import 'package:bluebubbles/helpers/attachment_sender.dart';
 import 'package:bluebubbles/helpers/constants.dart';
 import 'package:bluebubbles/helpers/crypto.dart';
 import 'package:bluebubbles/helpers/utils.dart';
-import 'package:bluebubbles/managers/attachment_info_bloc.dart';
 import 'package:bluebubbles/managers/current_chat.dart';
 import 'package:bluebubbles/managers/incoming_queue.dart';
 import 'package:bluebubbles/managers/life_cycle_manager.dart';
@@ -148,7 +146,7 @@ class SocketManager {
               value(true);
             });
             socketProcesses = new Map();
-            if (!LifeCycleManager().isAlive) {
+            if (!LifeCycleManager.instance.isAlive) {
               closeSocket(force: true);
             }
           });
@@ -163,16 +161,16 @@ class SocketManager {
         state.value = SocketState.DISCONNECTED;
         Timer t;
         t = Timer(const Duration(seconds: 5), () {
-          if (state.value == SocketState.DISCONNECTED && LifeCycleManager().isAlive && !Get.isSnackbarOpen!) {
+          if (state.value == SocketState.DISCONNECTED && LifeCycleManager.instance.isAlive && !Get.isSnackbarOpen!) {
             showSnackbar('Socket Disconnected', 'You are not longer connected to the socket 🔌');
           }
         });
-        LifeCycleManager().stream.listen((event) {
+        LifeCycleManager.instance.stream.listen((event) {
           if (!event && t.isActive) {
             t.cancel();
           } else {
             t = Timer(const Duration(seconds: 5), () {
-              if (state.value == SocketState.DISCONNECTED && LifeCycleManager().isAlive && !Get.isSnackbarOpen!) {
+              if (state.value == SocketState.DISCONNECTED && LifeCycleManager.instance.isAlive && !Get.isSnackbarOpen!) {
                 showSnackbar('Socket Disconnected', 'You are not longer connected to the socket 🔌');
               }
             });
@@ -295,7 +293,7 @@ class SocketManager {
         if (!SettingsManager().settings.enablePrivateAPI.value) return;
 
         Map<String, dynamic> data = _data;
-        CurrentChat? currentChat = AttachmentInfoBloc().getCurrentChat(data["guid"]);
+        CurrentChat? currentChat = CurrentChat.forGuid(data["guid"]);
         if (currentChat == null) return;
         if (data["display"]) {
           currentChat.displayTypingIndicator();

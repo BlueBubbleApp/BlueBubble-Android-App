@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:bluebubbles/action_handler.dart';
@@ -18,206 +19,100 @@ import 'package:bluebubbles/managers/notification_manager.dart';
 import 'package:bluebubbles/managers/settings_manager.dart';
 import 'package:bluebubbles/repository/models/chat.dart';
 import 'package:bluebubbles/repository/models/message.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 
-class MessagesView extends StatefulWidget {
-  final MessageBloc? messageBloc;
-  final bool showHandle;
-  final Chat? chat;
-  final Function? initComplete;
-  final List<Message> messages;
-
-  MessagesView({
-    Key? key,
-    this.messageBloc,
-    required this.showHandle,
-    this.chat,
-    this.initComplete,
-    this.messages = const [],
-  }) : super(key: key);
-
-  @override
-  MessagesViewState createState() => MessagesViewState();
-}
-
-class MessagesViewState extends State<MessagesView> with TickerProviderStateMixin {
+class MessagesViewController extends GetxController with SingleGetTickerProviderMixin {
   Completer<LoadMessageResult>? loader;
   bool noMoreMessages = false;
   bool noMoreLocalMessages = false;
-  List<Message> _messages = <Message>[];
-
-  GlobalKey<SliverAnimatedListState>? _listKey;
+  GlobalKey<SliverAnimatedListState> listKey = GlobalKey<SliverAnimatedListState>();
   final Duration animationDuration = Duration(milliseconds: 400);
   final smartReply = GoogleMlKit.nlp.smartReply();
-  bool initializedList = false;
   List<int> loadedPages = [];
-  CurrentChat? currentChat;
-  bool keyboardOpen = false;
+  RxList<String> smartReplies = <String>[].obs;
+  List<Message> messages = [];
 
-  List<Message> currentMessages = [];
-  List<String> replies = [];
-
-  late StreamController<List<String>> smartReplyController;
-
-  ScrollController? get scrollController {
-    if (currentChat == null) return null;
-
-    return currentChat!.scrollController;
-  }
+  final CurrentChat currentChat;
+  final MessageBloc messageBloc;
+  final bool showHandle;
+  final Chat chat;
+  final Function? initComplete;
+  MessagesViewController({
+    required this.messageBloc,
+    required this.showHandle,
+    required this.chat,
+    this.initComplete,
+    required this.currentChat,
+  });
 
   bool get showSmartReplies =>
       SettingsManager().settings.smartReply.value &&
-      (!SettingsManager().settings.redactedMode.value || !SettingsManager().settings.hideMessageContent.value);
+          (!SettingsManager().settings.redactedMode.value || !SettingsManager().settings.hideMessageContent.value);
 
   @override
-  void initState() {
-    super.initState();
-
-    currentChat = CurrentChat.of(context);
-    if (widget.messageBloc != null) ever<MessageBlocEvent?>(widget.messageBloc!.event, (e) => handleNewMessage(e));
+  void onInit() {
+    ever<MessageBlocEvent?>(messageBloc.event, (e) => handleNewMessage(e));
 
     // See if we need to load anything from the message bloc
-    if (widget.messages.isNotEmpty) {
-      _messages = widget.messages;
-    } else if (_messages.isEmpty && widget.messageBloc!.messages.isEmpty) {
-      widget.messageBloc!.getMessages();
-    } else if (_messages.isEmpty && widget.messageBloc!.messages.isNotEmpty) {
-      widget.messageBloc!.emitLoaded();
+    if (messages.isEmpty && messageBloc.messages.isEmpty) {
+      messageBloc.getMessages();
+    } else if (messages.isEmpty && messageBloc.messages.isNotEmpty) {
+      messageBloc.emitLoaded();
     }
 
-    smartReplyController = StreamController<List<String>>.broadcast();
-
-    EventDispatcher().stream.listen((Map<String, dynamic> event) {
-      if (!this.mounted) return;
+    EventDispatcher.instance.stream.listen((Map<String, dynamic> event) {
       if (!event.containsKey("type")) return;
 
       if (event["type"] == "refresh-messagebloc" && event["data"].containsKey("chatGuid")) {
         // Handle event's that require a matching guid
         String? chatGuid = event["data"]["chatGuid"];
-        if (widget.chat!.guid == chatGuid) {
+        if (chat.guid == chatGuid) {
           if (event["type"] == "refresh-messagebloc") {
             // Clear state items
             noMoreLocalMessages = false;
             noMoreMessages = false;
-            _messages = [];
+            messages = [];
             loadedPages = [];
 
             // Reload the state after refreshing
-            widget.messageBloc!.refresh().then((_) {
-              if (this.mounted) {
-                setState(() {});
-              }
+            messageBloc.refresh().then((_) {
+              update();
             });
           }
         }
       }
     });
-
-    if (widget.initComplete != null) widget.initComplete!();
+    if (initComplete != null) initComplete!();
+    super.onInit();
   }
 
-  void resetReplies() {
-    if (replies.length == 0) return;
-    replies = [];
-    return smartReplyController.sink.add(replies);
-  }
-
-  void updateReplies() async {
-    // If there are no messages or the latest message is from me, reset the replies
-    if (isNullOrEmpty(_messages)!) return resetReplies();
-    if (_messages.first.isFromMe!) return resetReplies();
-
-    debugPrint("Getting smart replies...");
-    Map<String, dynamic> results = await smartReply.suggestReplies();
-
-    if (results.containsKey('suggestions')) {
-      List<SmartReplySuggestion> suggestions = results['suggestions'];
-      debugPrint("Smart Replies found: ${suggestions.length}");
-      replies = suggestions.map((e) => e.getText()).toList().toSet().toList();
-      debugPrint(replies.toString());
-    }
-
-    // If there is nothing in the list, get out
-    if (isNullOrEmpty(replies)!) {
-      resetReplies();
-      return;
-    }
-
-    // If everything passes, add replies to the stream
-    if (!smartReplyController.isClosed) smartReplyController.sink.add(replies);
-  }
-
-  Future<void>? loadNextChunk() {
-    if (noMoreMessages || loadedPages.contains(_messages.length)) return null;
-    int messageCount = _messages.length;
-
-    // If we already are loading a chunk, don't load again
-    if (loader != null && !loader!.isCompleted) {
-      return loader!.future;
-    }
-
-    // Create a new completer
-    loader = new Completer();
-    loadedPages.add(messageCount);
-
-    // Start loading the next chunk of messages
-    widget.messageBloc!
-        .loadMessageChunk(_messages.length, checkLocal: !noMoreLocalMessages)
-        .then((LoadMessageResult val) {
-      if (val != LoadMessageResult.FAILED_TO_RETREIVE) {
-        if (val == LoadMessageResult.RETREIVED_NO_MESSAGES) {
-          noMoreMessages = true;
-          debugPrint("(CHUNK) No more messages to load");
-        } else if (val == LoadMessageResult.RETREIVED_LAST_PAGE) {
-          // Mark this chat saying we have no more messages to load
-          noMoreLocalMessages = true;
-        }
-      }
-
-      // Complete the future
-      loader!.complete(val);
-
-      // Only update the state if there are messages that were added
-      if (val != LoadMessageResult.FAILED_TO_RETREIVE) {
-        if (this.mounted) setState(() {});
-      }
-    }).catchError((ex) {
-      loader!.complete(LoadMessageResult.FAILED_TO_RETREIVE);
-    });
-
-    return loader!.future;
+  @override
+  void dispose() {
+    smartReply.close();
+    super.dispose();
   }
 
   void handleNewMessage(MessageBlocEvent? event) async {
-    // Get outta here if we don't have a chat "open"
-    if (currentChat == null) return;
     if (event == null) return;
 
     // Skip deleted messages
     if (event.message != null && event.message!.dateDeleted != null) return;
-    if (!isNullOrEmpty(event.messages)!) {
-      event.messages = event.messages.where((element) => element.dateDeleted == null).toList();
-    }
+    event.messages.retainWhere((element) => element.dateDeleted == null);
 
-    if (event.type == MessageBlocEventType.insert && this.mounted) {
-      if (LifeCycleManager().isAlive && !event.outGoing) {
-        NotificationManager().switchChat(CurrentChat.of(context)?.chat);
+    if (event.type == MessageBlocEventType.insert) {
+      if (LifeCycleManager.instance.isAlive && !event.outGoing) {
+        NotificationManager().switchChat(chat);
       }
 
-      bool isNewMessage = true;
-      for (Message? message in _messages) {
-        if (message!.guid == event.message!.guid) {
-          isNewMessage = false;
-          break;
-        }
-      }
+      bool isNewMessage = messages.firstWhereOrNull((e) => e.guid == event.message?.guid) == null;
 
-      _messages = event.messages;
-      if (_listKey != null && _listKey!.currentState != null) {
-        _listKey!.currentState!.insertItem(
+      messages = event.messages;
+      if (listKey.currentState != null) {
+        listKey.currentState!.insertItem(
           event.index != null ? event.index! : 0,
           duration: isNewMessage
               ? event.outGoing
@@ -227,44 +122,36 @@ class MessagesViewState extends State<MessagesView> with TickerProviderStateMixi
         );
       }
 
-      if (event.outGoing) {
-        currentChat!.sentMessages.add(event.message);
-        Future.delayed(Duration(milliseconds: 300) * 2, () {
-          currentChat!.sentMessages.removeWhere((element) => element!.guid == event.message!.guid);
-        });
-      }
-
       if (event.outGoing) await Future.delayed(Duration(milliseconds: 300));
 
-      currentChat!.getAttachmentsForMessage(event.message);
+      //todo
+      /*currentChat.getAttachmentsForMessage(event.message);
 
       if (event.message!.hasAttachments) {
-        await currentChat!.updateChatAttachments();
-        if (this.mounted) setState(() {});
-      }
+        await currentChat.updateChatAttachments();
+      }*/
 
       if (isNewMessage && this.showSmartReplies) {
         updateReplies();
       }
     } else if (event.type == MessageBlocEventType.remove) {
-      for (int i = 0; i < _messages.length; i++) {
-        if (_messages[i].guid == event.remove && _listKey!.currentState != null) {
-          _messages.removeAt(i);
-          _listKey!.currentState!.removeItem(i, (context, animation) => Container());
-        }
-      }
+      messages.removeWhere((element) => element.guid == event.remove);
+      // we do this to force the listview to update once
+      listKey = GlobalKey<SliverAnimatedListState>();
     } else {
-      int originalMessageLength = _messages.length;
-      _messages = event.messages;
-      _messages.forEach((message) {
-        currentChat?.getAttachmentsForMessage(message);
-        currentChat?.messageMarkers.updateMessageMarkers(message);
-      });
+      int originalMessageLength = messages.length;
+      messages = event.messages;
+
+      //todo
+      /*messages.forEach((message) {
+        currentChat.getAttachmentsForMessage(message);
+        currentChat.messageMarkers.updateMessageMarkers(message);
+      });*/
 
       // This needs to be in reverse so that the oldest message gets added first
       // We also only want to grab the last 5, so long as there are at least 5 results
-      List<Message> reversed = _messages.reversed.toList();
-      int sampleSize = (_messages.length > 5) ? 5 : _messages.length;
+      List<Message> reversed = messages.reversed.toList();
+      int sampleSize = min(5, messages.length);
       reversed.sublist(reversed.length - sampleSize).forEach((message) {
         if (!isEmptyString(message.fullText, stripWhitespace: true)) {
           if (message.isFromMe ?? false) {
@@ -276,62 +163,115 @@ class MessagesViewState extends State<MessagesView> with TickerProviderStateMixi
       });
 
       // We only want to update smart replies on the intial message fetch
-      if (originalMessageLength == 0) {
-        if (this.showSmartReplies) {
-          if (_messages.length > 0) updateReplies();
-        }
+      if (originalMessageLength == 0 && showSmartReplies && messages.length > 0) {
+        updateReplies();
       }
-      if (_listKey == null) _listKey = GlobalKey<SliverAnimatedListState>();
 
-      if (originalMessageLength < _messages.length) {
-        for (int i = originalMessageLength; i < _messages.length; i++) {
-          if (_listKey != null && _listKey!.currentState != null)
-            _listKey!.currentState!.insertItem(i, duration: Duration(milliseconds: 0));
-        }
-      } else if (originalMessageLength > _messages.length) {
-        for (int i = originalMessageLength; i >= _messages.length; i--) {
-          if (_listKey != null && _listKey!.currentState != null) {
-            try {
-              _listKey!.currentState!
-                  .removeItem(i, (context, animation) => Container(), duration: Duration(milliseconds: 0));
-            } catch (ex) {
-              debugPrint("Error removing item animation");
-              debugPrint(ex.toString());
-            }
-          }
-        }
-      }
+      // we do this to force the listview to update once
+      listKey = GlobalKey<SliverAnimatedListState>();
     }
 
-    if (this.mounted) setState(() {});
+    update();
+  }
+
+  void updateReplies() async {
+    // If there are no messages, reset the replies
+    if (isNullOrEmpty(messages)!) {
+      smartReplies.clear();
+      return;
+    }
+
+    debugPrint("Getting smart replies...");
+    Map<String, dynamic> results = await smartReply.suggestReplies();
+
+    if (results.containsKey('suggestions')) {
+      List<SmartReplySuggestion> suggestions = results['suggestions'];
+      debugPrint("Smart Replies found: ${suggestions.length}");
+      smartReplies.value = suggestions.map((e) => e.getText()).toList().toSet().toList();
+    }
+  }
+}
+
+class MessagesView extends StatelessWidget {
+  final MessageBloc messageBloc;
+  final bool showHandle;
+  final Chat chat;
+  final Function? initComplete;
+  final CurrentChat currentChat;
+
+  MessagesView({
+    Key? key,
+    required this.messageBloc,
+    required this.showHandle,
+    required this.chat,
+    this.initComplete,
+    required this.currentChat,
+  }) : super(key: key);
+
+  Future<void>? loadNextChunk(MessagesViewController controller, ) {
+    if (controller.noMoreMessages || controller.loadedPages.contains(controller.messages.length)) return null;
+    int messageCount = controller.messages.length;
+
+    // If we already are loading a chunk, don't load again
+    if (controller.loader != null && !controller.loader!.isCompleted) {
+      return controller.loader!.future;
+    }
+
+    // Create a new completer
+    controller.loader = new Completer();
+    controller.loadedPages.add(messageCount);
+
+    // Start loading the next chunk of messages
+    messageBloc
+        .loadMessageChunk(controller.messages.length, checkLocal: !controller.noMoreLocalMessages)
+        .then((LoadMessageResult val) {
+      if (val != LoadMessageResult.FAILED_TO_RETREIVE) {
+        if (val == LoadMessageResult.RETREIVED_NO_MESSAGES) {
+          controller.noMoreMessages = true;
+          debugPrint("(CHUNK) No more messages to load");
+        } else if (val == LoadMessageResult.RETREIVED_LAST_PAGE) {
+          // Mark this chat saying we have no more messages to load
+          controller.noMoreLocalMessages = true;
+        }
+      }
+
+      // Complete the future
+      controller.loader!.complete(val);
+
+      // Only update the state if there are messages that were added
+      if (val != LoadMessageResult.FAILED_TO_RETREIVE) {
+        controller.update();
+      }
+    }).catchError((ex) {
+      controller.loader!.complete(LoadMessageResult.FAILED_TO_RETREIVE);
+    });
+
+    return controller.loader!.future;
   }
 
   /// All message update events are handled within the message widgets, to prevent top level setstates
-  Message? onUpdateMessage(NewMessageEvent event) {
+  Message? onUpdateMessage(MessagesViewController controller, NewMessageEvent event) {
     if (event.type != NewMessageType.UPDATE) return null;
-    currentChat!.updateExistingAttachments(event);
+    currentChat.updateExistingAttachments(event);
 
     String? oldGuid = event.event["oldGuid"];
     Message? message = event.event["message"];
 
-    bool updatedAMessage = false;
-    for (int i = 0; i < _messages.length; i++) {
-      if (_messages[i].guid == oldGuid) {
+    for (int i = 0; i < controller.messages.length; i++) {
+      if (controller.messages[i].guid == oldGuid) {
         debugPrint("(Message status) Update message: [${message!.text}] - [${message.guid}] - [$oldGuid]");
-        _messages[i] = message;
-        updatedAMessage = true;
+        controller.messages[i] = message;
         break;
+      } else {
+        debugPrint(
+            "(Message status) Message not updated (not found): [${message!.text}] - [${message.guid}] - [$oldGuid]");
       }
-    }
-    if (!updatedAMessage) {
-      debugPrint(
-          "(Message status) Message not updated (not found): [${message!.text}] - [${message.guid}] - [$oldGuid]");
     }
 
     return message;
   }
 
-  Widget _buildReply(String text) => Container(
+  Widget _buildReply(BuildContext context, String text) => Container(
         margin: EdgeInsets.all(5),
         decoration: BoxDecoration(
           border: Border.all(
@@ -346,7 +286,7 @@ class MessagesViewState extends State<MessagesView> with TickerProviderStateMixi
             borderRadius: BorderRadius.circular(19),
           ),
           onTap: () {
-            ActionHandler.sendMessage(currentChat!.chat, text);
+            ActionHandler.sendMessage(currentChat.chat, text);
           },
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 13.0),
@@ -360,180 +300,147 @@ class MessagesViewState extends State<MessagesView> with TickerProviderStateMixi
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.deferToChild,
-      onHorizontalDragStart: (details) {},
-      onHorizontalDragUpdate: (details) {
-        if (SettingsManager().settings.skin.value != Skins.Samsung)
-          CurrentChat.of(context)!.timeStampOffset += details.delta.dx * 0.3;
-      },
-      onHorizontalDragEnd: (details) {
-        if (SettingsManager().settings.skin.value != Skins.Samsung) CurrentChat.of(context)!.timeStampOffset = 0;
-      },
-      onHorizontalDragCancel: () {
-        if (SettingsManager().settings.skin.value != Skins.Samsung) CurrentChat.of(context)!.timeStampOffset = 0;
-      },
-      child: CustomScrollView(
-        controller: scrollController ?? ScrollController(),
-        reverse: true,
-        physics: ThemeSwitcher.getScrollPhysics(),
-        slivers: <Widget>[
-          if (this.showSmartReplies)
-            StreamBuilder<List<String?>>(
-              stream: smartReplyController.stream,
-              builder: (context, snapshot) {
-                return SliverToBoxAdapter(
-                  child: AnimatedSize(
-                    duration: Duration(milliseconds: 250),
-                    vsync: this,
-                    child: Row(
+    return GetBuilder<MessagesViewController>(
+      global: false,
+      init: MessagesViewController(
+        messageBloc: messageBloc,
+        showHandle: showHandle,
+        chat: chat,
+        initComplete: initComplete,
+        currentChat: currentChat,
+      ),
+      builder: (controller) {
+        return GestureDetector(
+            behavior: HitTestBehavior.deferToChild,
+            onHorizontalDragStart: (details) {},
+            onHorizontalDragUpdate: (details) {
+              if (SettingsManager().settings.skin.value != Skins.Samsung)
+                CurrentChat.of(context)!.timeStampOffset.value += details.delta.dx * 0.3;
+            },
+            onHorizontalDragEnd: (details) {
+              if (SettingsManager().settings.skin.value != Skins.Samsung) CurrentChat.of(context)!.timeStampOffset.value = 0;
+            },
+            onHorizontalDragCancel: () {
+              if (SettingsManager().settings.skin.value != Skins.Samsung) CurrentChat.of(context)!.timeStampOffset.value = 0;
+            },
+            child: CustomScrollView(
+              controller: CurrentChat.of(context)!.scrollController,
+              reverse: true,
+              physics: ThemeSwitcher.getScrollPhysics(),
+              slivers: <Widget>[
+                if (controller.showSmartReplies)
+                  Obx(() => SliverToBoxAdapter(
+                    child: AnimatedSize(
+                      duration: Duration(milliseconds: 250),
+                      vsync: controller,
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
-                        children: replies
-                            .map(
-                              (e) => _buildReply(e),
-                        )
-                            .toList()),
-                  ),
-                );
-              },
-            ),
-          if (SettingsManager().settings.enablePrivateAPI.value || widget.chat?.guid == "theme-selector")
-            SliverToBoxAdapter(
-              child: Row(
-                children: <Widget>[
-                  if (widget.chat?.guid == "theme-selector" ||
-                      (currentChat!.showTypingIndicator && SettingsManager().settings.alwaysShowAvatars.value))
-                    Padding(
-                      padding: EdgeInsets.only(left: 10.0),
-                      child: ContactAvatarWidget(
-                        key: Key("${widget.chat!.participants[0].address}-messages-view"),
-                        handle: widget.chat!.participants[0],
-                        size: 30,
-                        fontSize: 14,
-                        borderThickness: 0.1,
-                      ),
+                        children: controller.smartReplies.map((e) => _buildReply(context, e)).toList()),
                     ),
-                  Padding(
-                    padding: EdgeInsets.only(top: 5),
-                    child: TypingIndicator(
-                      visible: widget.chat?.guid == "theme-selector" ? true : currentChat!.showTypingIndicator,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          widget.messages.isNotEmpty
-              ? SliverList(
-            delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                Message? olderMessage;
-                Message? newerMessage;
-                if (index + 1 >= 0 && index + 1 < _messages.length) {
-                  olderMessage = _messages[index + 1];
-                }
-                if (index - 1 >= 0 && index - 1 < _messages.length) {
-                  newerMessage = _messages[index - 1];
-                }
-
-                return Padding(
-                    padding: EdgeInsets.only(left: 5.0, right: 5.0),
-                    child: MessageWidget(
-                      key: Key(_messages[index].guid!),
-                      message: _messages[index],
-                      olderMessage: olderMessage,
-                      newerMessage: newerMessage,
-                      showHandle: widget.showHandle,
-                      isFirstSentMessage: widget.messageBloc!.firstSentMessage == _messages[index].guid,
-                      showHero: false,
-                      onUpdate: (event) => onUpdateMessage(event),
-                    ));
-              },
-              childCount: _messages.length,
-            ),
-          )
-              : _listKey != null
-              ? SliverAnimatedList(
-              initialItemCount: _messages.length + 1,
-              key: _listKey,
-              itemBuilder: (BuildContext context, int index, Animation<double> animation) {
-                // Load more messages if we are at the top and we aren't alrady loading
-                // and we have more messages to load
-                if (index == _messages.length) {
-                  if (!noMoreMessages &&
-                      (loader == null || !loader!.isCompleted || !loadedPages.contains(_messages.length))) {
-                    loadNextChunk();
-                    return NewMessageLoader();
-                  }
-
-                  return Container();
-                } else if (index > _messages.length) {
-                  return Container();
-                }
-
-                Message? olderMessage;
-                Message? newerMessage;
-                if (index + 1 >= 0 && index + 1 < _messages.length) {
-                  olderMessage = _messages[index + 1];
-                }
-                if (index - 1 >= 0 && index - 1 < _messages.length) {
-                  newerMessage = _messages[index - 1];
-                }
-
-                bool fullAnimation =
-                    index == 0 && (!_messages[index].isFromMe! || _messages[index].originalROWID == null);
-
-                Widget messageWidget = Padding(
-                    padding: EdgeInsets.only(left: 5.0, right: 5.0),
-                    child: MessageWidget(
-                      key: Key(_messages[index].guid!),
-                      message: _messages[index],
-                      olderMessage: olderMessage,
-                      newerMessage: newerMessage,
-                      showHandle: widget.showHandle,
-                      isFirstSentMessage: widget.messageBloc!.firstSentMessage == _messages[index].guid,
-                      showHero: fullAnimation,
-                      onUpdate: (event) => onUpdateMessage(event),
-                    ));
-
-                if (fullAnimation) {
-                  return SizeTransition(
-                    axis: Axis.vertical,
-                    sizeFactor: animation
-                        .drive(Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeInOut))),
-                    child: SlideTransition(
-                      position: animation.drive(
-                        Tween(
-                          begin: Offset(0.0, 1),
-                          end: Offset(0.0, 0.0),
-                        ).chain(
-                          CurveTween(
-                            curve: Curves.easeInOut,
+                  )),
+                if (SettingsManager().settings.enablePrivateAPI.value || chat.guid == "theme-selector")
+                  SliverToBoxAdapter(
+                    child: Row(
+                      children: <Widget>[
+                        if (chat.guid == "theme-selector" ||
+                            (currentChat.showTypingIndicator.value && SettingsManager().settings.alwaysShowAvatars.value))
+                          Padding(
+                            padding: EdgeInsets.only(left: 10.0),
+                            child: ContactAvatarWidget(
+                              key: Key("${chat.participants[0].address}-messages-view"),
+                              handle: chat.participants[0],
+                              size: 30,
+                              fontSize: 14,
+                              borderThickness: 0.1,
+                            ),
+                          ),
+                        Padding(
+                          padding: EdgeInsets.only(top: 5),
+                          child: TypingIndicator(
+                            visible: chat.guid == "theme-selector" ? true : currentChat.showTypingIndicator.value,
                           ),
                         ),
-                      ),
-                      child: Opacity(
-                        opacity: animation.isCompleted || !_messages[index].isFromMe! ? 1 : 0,
-                        child: messageWidget,
-                      ),
+                      ],
                     ),
-                  );
-                }
+                  ),
+                SliverAnimatedList(
+                  initialItemCount: controller.messages.length + 1,
+                  key: controller.listKey,
+                  itemBuilder: (BuildContext context, int index, Animation<double> animation) {
+                    // Load more messages if we are at the top and we aren't alrady loading
+                    // and we have more messages to load
+                    if (index == controller.messages.length) {
+                      if (!controller.noMoreMessages &&
+                          (controller.loader == null || !controller.loader!.isCompleted || !controller.loadedPages.contains(controller.messages.length))) {
+                        loadNextChunk(controller);
+                        return NewMessageLoader();
+                      }
 
-                return messageWidget;
-              })
-              : SliverToBoxAdapter(child: Container()),
-          SliverPadding(
-            padding: EdgeInsets.all(70),
-          ),
-        ],
-      )
+                      return Container();
+                    } else if (index > controller.messages.length) {
+                      return Container();
+                    }
+
+                    Message? olderMessage;
+                    Message? newerMessage;
+                    if (index + 1 < controller.messages.length) {
+                      olderMessage = controller.messages[index + 1];
+                    }
+                    if (index - 1 >= 0) {
+                      newerMessage = controller.messages[index - 1];
+                    }
+
+                    bool fullAnimation =
+                        index == 0 && (!controller.messages[index].isFromMe!
+                            || controller.messages[index].originalROWID == null);
+
+                    final messageWidget = Padding(
+                        padding: EdgeInsets.only(left: 5.0, right: 5.0),
+                        child: MessageWidget(
+                          key: Key(controller.messages[index].guid!),
+                          message: controller.messages[index],
+                          olderMessage: olderMessage,
+                          newerMessage: newerMessage,
+                          showHandle: showHandle,
+                          isFirstSentMessage: messageBloc.firstSentMessage == controller.messages[index].guid,
+                          showHero: fullAnimation,
+                          onUpdate: (event) => onUpdateMessage(controller, event),
+                        ));
+
+                    if (fullAnimation) {
+                      return SizeTransition(
+                        axis: Axis.vertical,
+                        sizeFactor: animation
+                            .drive(Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeInOut))),
+                        child: SlideTransition(
+                          position: animation.drive(
+                            Tween(
+                              begin: Offset(0.0, 1),
+                              end: Offset(0.0, 0.0),
+                            ).chain(
+                              CurveTween(
+                                curve: Curves.easeInOut,
+                              ),
+                            ),
+                          ),
+                          child: Opacity(
+                            opacity: animation.isCompleted || !controller.messages[index].isFromMe! ? 1 : 0,
+                            child: messageWidget,
+                          ),
+                        ),
+                      );
+                    }
+
+                    return messageWidget;
+                  }
+                ),
+                SliverPadding(
+                  padding: EdgeInsets.all(70),
+                ),
+              ],
+            )
+        );
+      }
     );
-  }
-
-  @override
-  void dispose() {
-    if (!smartReplyController.isClosed) smartReplyController.close();
-    smartReply.close();
-    super.dispose();
   }
 }

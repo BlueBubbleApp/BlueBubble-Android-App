@@ -7,13 +7,15 @@ import 'package:bluebubbles/managers/settings_manager.dart';
 import 'package:bluebubbles/repository/models/message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:tuple/tuple.dart';
 
-class MessagePopupHolder extends StatefulWidget {
+class MessagePopupHolder extends StatelessWidget {
   final Widget child;
   final Widget popupChild;
   final Message message;
   final Message? olderMessage;
   final Message? newerMessage;
+  final GlobalKey containerKey = GlobalKey();
 
   MessagePopupHolder({
     Key? key,
@@ -24,43 +26,27 @@ class MessagePopupHolder extends StatefulWidget {
     required this.newerMessage,
   }) : super(key: key);
 
-  @override
-  _MessagePopupHolderState createState() => _MessagePopupHolderState();
-}
-
-class _MessagePopupHolderState extends State<MessagePopupHolder> {
-  GlobalKey containerKey = GlobalKey();
-  Offset childOffset = Offset(0, 0);
-  Size? childSize;
-  bool visible = true;
-
-  void getOffset() {
+  Tuple2<Offset, Size> getOffset(BuildContext context) {
     RenderBox renderBox = containerKey.currentContext!.findRenderObject() as RenderBox;
     Size size = renderBox.size;
     Offset offset = renderBox.localToGlobal(Offset.zero);
-    bool increaseWidth = !MessageHelper.getShowTail(context, widget.message, widget.newerMessage)
+    bool increaseWidth = !MessageHelper.getShowTail(context, message, newerMessage)
         && (SettingsManager().settings.alwaysShowAvatars.value || (CurrentChat.of(context)?.chat.isGroup() ?? false));
-    bool doNotIncreaseHeight = ((widget.message.isFromMe ?? false)
+    bool doNotIncreaseHeight = ((message.isFromMe ?? false)
         || !(CurrentChat.of(context)?.chat.isGroup() ?? false)
-        || !sameSender(widget.message, widget.olderMessage)
-        || !widget.message.dateCreated!.isWithin(widget.olderMessage!.dateCreated!, minutes: 30));
-    print(doNotIncreaseHeight);
-    this.childOffset = Offset(offset.dx - (increaseWidth ? 35 : 0),
-        offset.dy - (doNotIncreaseHeight ? 0 : widget.message.getReactions().length > 0 ? 20.0 : 23.0));
-    childSize = Size(size.width + (increaseWidth ? 35 : 0),
-        size.height + (doNotIncreaseHeight ? 0 : widget.message.getReactions().length > 0 ? 20.0 : 23.0));
+        || !sameSender(message, olderMessage)
+        || !message.dateCreated!.isWithin(olderMessage!.dateCreated!, minutes: 30));
+    return Tuple2(Offset(offset.dx - (increaseWidth ? 35 : 0),
+        offset.dy - (doNotIncreaseHeight ? 0 : message.getReactions().length > 0 ? 20.0 : 23.0)),
+        Size(size.width + (increaseWidth ? 35 : 0),
+        size.height + (doNotIncreaseHeight ? 0 : message.getReactions().length > 0 ? 20.0 : 23.0)));
   }
 
-  void openMessageDetails() async {
+  void openMessageDetails(BuildContext context) async {
     HapticFeedback.lightImpact();
-    getOffset();
+    Tuple2<Offset, Size> data = getOffset(context);
 
     CurrentChat? currentChat = CurrentChat.of(context);
-    if (this.mounted) {
-      setState(() {
-        visible = false;
-      });
-    }
 
     await Navigator.push(
       context,
@@ -72,46 +58,37 @@ class _MessagePopupHolderState extends State<MessagePopupHolder> {
               opacity: animation,
               child: MessageDetailsPopup(
                 currentChat: currentChat,
-                child: widget.popupChild,
-                childOffset: childOffset,
-                childSize: childSize,
-                message: widget.message,
+                child: popupChild,
+                childOffset: data.item1,
+                childSize: data.item2,
+                message: message,
               ));
         },
         fullscreenDialog: true,
         opaque: false,
       ),
     );
-
-    if (this.mounted) {
-      setState(() {
-        visible = true;
-      });
-    }
   }
 
-  void sendReaction(String type) {
+  void sendReaction(String type, BuildContext context) {
     debugPrint("Sending reaction type: " + type);
-    ActionHandler.sendReaction(CurrentChat.of(context)!.chat, widget.message, type);
+    ActionHandler.sendReaction(CurrentChat.of(context)!.chat, message, type);
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       key: containerKey,
-      onDoubleTap: SettingsManager().settings.doubleTapForDetails.value && !widget.message.guid!.startsWith('temp')
-          ? this.openMessageDetails
+      onDoubleTap: () => SettingsManager().settings.doubleTapForDetails.value && !message.guid!.startsWith('temp')
+          ? this.openMessageDetails(context)
           : SettingsManager().settings.enableQuickTapback.value
               ? () {
                   HapticFeedback.lightImpact();
-                  this.sendReaction(SettingsManager().settings.quickTapbackType.value);
+                  this.sendReaction(SettingsManager().settings.quickTapbackType.value, context);
                 }
               : null,
-      onLongPress: this.openMessageDetails,
-      child: Opacity(
-        child: widget.child,
-        opacity: visible ? 1 : 0,
-      ),
+      onLongPress: () => this.openMessageDetails(context),
+      child: child,
     );
   }
 }

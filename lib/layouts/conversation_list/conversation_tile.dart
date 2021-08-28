@@ -55,9 +55,6 @@ class _ConversationTileState extends State<ConversationTile> with AutomaticKeepA
   Color? previousBackgroundColor;
   bool gotBrightness = false;
 
-  // Typing indicator
-  bool showTypingIndicator = false;
-
   void loadBrightness() {
     Color now = Theme.of(context).backgroundColor;
     bool themeChanged = previousBackgroundColor == null || previousBackgroundColor != now;
@@ -80,40 +77,6 @@ class _ConversationTileState extends State<ConversationTile> with AutomaticKeepA
   void initState() {
     super.initState();
     fetchParticipants();
-    // Listen for changes in the group
-    NewMessageManager().stream.listen((NewMessageEvent event) async {
-      // Make sure we have the required data to qualify for this tile
-      if (event.chatGuid != widget.chat.guid) return;
-      if (!event.event.containsKey("message")) return;
-      if (widget.chat.guid == null) return;
-      // Make sure the message is a group event
-      Message message = event.event["message"];
-      if (!message.isGroupEvent()) return;
-
-      // If it's a group event, let's fetch the new information and save it
-      try {
-        await fetchChatSingleton(widget.chat.guid!);
-      } catch (ex) {
-        debugPrint(ex.toString());
-      }
-
-      this.setNewChatData(forceUpdate: true);
-    });
-  }
-
-  void setNewChatData({forceUpdate: false}) async {
-    // Save the current participant list and get the latest
-    List<Handle> ogParticipants = widget.chat.participants;
-    await widget.chat.getParticipants();
-
-    // Save the current title and generate the new one
-    String? ogTitle = widget.chat.title;
-    await widget.chat.getTitle();
-
-    // If the original data is different, update the state
-    if (ogTitle != widget.chat.title || ogParticipants.length != widget.chat.participants.length || forceUpdate) {
-      if (this.mounted) setState(() {});
-    }
   }
 
   Future<void> fetchParticipants() async {
@@ -166,7 +129,7 @@ class _ConversationTileState extends State<ConversationTile> with AutomaticKeepA
                 icon: widget.chat.isPinned! ? Icons.star_outline : Icons.star,
                 onTap: () async {
                   await widget.chat.togglePin(!widget.chat.isPinned!);
-                  EventDispatcher().emit("refresh", null);
+                  EventDispatcher.instance.emit("refresh", null);
                   if (this.mounted) setState(() {});
                 },
               ),
@@ -235,55 +198,56 @@ class _ConversationTileState extends State<ConversationTile> with AutomaticKeepA
   }
 
   Widget buildSubtitle() {
-    return StreamBuilder<Map<String, dynamic>>(
-      stream: CurrentChat.getCurrentChat(widget.chat)?.stream as Stream<Map<String, dynamic>>?,
-      builder: (BuildContext context, AsyncSnapshot snapshot) {
-        if (snapshot.connectionState == ConnectionState.active &&
-            snapshot.hasData &&
-            snapshot.data["type"] == CurrentChatEvent.TypingStatus) {
-          showTypingIndicator = snapshot.data["data"];
-        }
-        if (showTypingIndicator) {
-          double height = Theme.of(context).textTheme.subtitle1!.fontSize!;
-          double indicatorHeight = (height * 2).clamp(height, height + 13);
-          return Container(
-            transform: Matrix4.translationValues(SettingsManager().settings.skin.value == Skins.iOS ? 0 : -5, 0, 0),
-            height: height,
-            child: OverflowBox(
-              alignment: Alignment.topLeft,
-              maxHeight: indicatorHeight,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: indicatorHeight),
-                child: FittedBox(
-                  alignment: Alignment.centerLeft,
-                  child: TypingIndicator(
-                    visible: true,
+    return GetBuilder<CurrentChat>(
+      init: CurrentChat(
+        chat: widget.chat,
+      ),
+      autoRemove: false,
+      tag: widget.chat.guid,
+      builder: (controller) {
+        return Obx(() {
+          if (controller.showTypingIndicator.value) {
+            double height = Theme.of(context).textTheme.subtitle1!.fontSize!;
+            double indicatorHeight = (height * 2).clamp(height, height + 13);
+            return Container(
+              transform: Matrix4.translationValues(SettingsManager().settings.skin.value == Skins.iOS ? 0 : -5, 0, 0),
+              height: height,
+              child: OverflowBox(
+                alignment: Alignment.topLeft,
+                maxHeight: indicatorHeight,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: indicatorHeight),
+                  child: FittedBox(
+                    alignment: Alignment.centerLeft,
+                    child: TypingIndicator(
+                      visible: true,
+                    ),
                   ),
                 ),
               ),
+            );
+          }
+
+          final hideContent =
+              SettingsManager().settings.redactedMode.value && SettingsManager().settings.hideMessageContent.value;
+          final generateContent = SettingsManager().settings.redactedMode.value &&
+              SettingsManager().settings.generateFakeMessageContent.value;
+
+          TextStyle style = Theme.of(context).textTheme.subtitle1!.apply(
+            color: Theme.of(context).textTheme.subtitle1!.color!.withOpacity(
+              0.85,
             ),
           );
-        }
+          String? message = widget.chat.latestMessageText != null ? widget.chat.latestMessageText : "";
 
-        final hideContent =
-            SettingsManager().settings.redactedMode.value && SettingsManager().settings.hideMessageContent.value;
-        final generateContent = SettingsManager().settings.redactedMode.value &&
-            SettingsManager().settings.generateFakeMessageContent.value;
+          if (generateContent)
+            message = widget.chat.fakeLatestMessageText;
+          else if (hideContent) style = style.copyWith(color: Colors.transparent);
 
-        TextStyle style = Theme.of(context).textTheme.subtitle1!.apply(
-              color: Theme.of(context).textTheme.subtitle1!.color!.withOpacity(
-                    0.85,
-                  ),
-            );
-        String? message = widget.chat.latestMessageText != null ? widget.chat.latestMessageText : "";
-
-        if (generateContent)
-          message = widget.chat.fakeLatestMessageText;
-        else if (hideContent) style = style.copyWith(color: Colors.transparent);
-
-        return widget.chat.latestMessageText != null && !(widget.chat.latestMessageText is String)
-            ? widget.chat.latestMessageText as Widget
-            : TextOneLine(message ?? "", style: style, overflow: TextOverflow.ellipsis);
+          return widget.chat.latestMessageText != null && !(widget.chat.latestMessageText is String)
+              ? widget.chat.latestMessageText as Widget
+              : TextOneLine(message ?? "", style: style, overflow: TextOverflow.ellipsis);
+        });
       },
     );
   }

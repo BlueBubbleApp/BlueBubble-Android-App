@@ -8,7 +8,6 @@ import 'package:bluebubbles/managers/settings_manager.dart';
 import 'package:chewie/chewie.dart';
 import 'package:get/get.dart';
 import 'package:bluebubbles/helpers/attachment_helper.dart';
-import 'package:bluebubbles/helpers/hex_color.dart';
 import 'package:bluebubbles/helpers/share.dart';
 import 'package:bluebubbles/helpers/utils.dart';
 import 'package:bluebubbles/layouts/widgets/message_widget/message_content/media_players/video_widget.dart';

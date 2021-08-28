@@ -111,7 +111,7 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
     }
     initConversationViewState();
 
-    LifeCycleManager().stream.listen((event) {
+    LifeCycleManager.instance.stream.listen((event) {
       if (!this.mounted) return;
       currentChat?.isAlive = true;
     });
@@ -135,9 +135,13 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
       await Future.delayed(Duration(milliseconds: 500));
       final textFieldSize = (key.currentContext?.findRenderObject() as RenderBox?)?.size.height;
       if (mounted) {
-        setState(() {
+        try {
+          setState(() {
+            offset = (textFieldSize ?? 0) > 300 ? 300 : 0;
+          });
+        } catch (_) {
           offset = (textFieldSize ?? 0) > 300 ? 300 : 0;
-        });
+        }
       }
     });
 
@@ -147,7 +151,7 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
     if (messageBloc != null) {
       ever<MessageBlocEvent?>(messageBloc!.event, (event) async {
         // Get outta here if we don't have a chat "open"
-        if (currentChat == null) return;
+        if (CurrentChat.activeChat == null) return;
         if (event == null) return;
 
         // Skip deleted messages
@@ -155,7 +159,7 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
 
         if (event.type == MessageBlocEventType.insert && this.mounted && event.outGoing) {
           final constraints = BoxConstraints(
-            maxWidth: context.width * MessageWidgetMixin.MAX_SIZE,
+            maxWidth: context.width * MessageWidgetHelper.MAX_SIZE,
             minHeight: Theme.of(context).textTheme.bodyText2!.fontSize!,
             maxHeight: Theme.of(context).textTheme.bodyText2!.fontSize!,
           );
@@ -169,7 +173,7 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
           final size = renderParagraph.getDryLayout(constraints);
           if (!(message?.hasAttachments ?? false) && !(message?.text?.isEmpty ?? false))
             setState(() {
-              tween = Tween<double>(begin: context.width - 30, end: min(size.width + 68, context.width * MessageWidgetMixin.MAX_SIZE + 40));
+              tween = Tween<double>(begin: context.width - 30, end: min(size.width + 68, context.width * MessageWidgetHelper.MAX_SIZE + 40));
               controller = CustomAnimationControl.play;
               message = event.message;
             });
@@ -199,7 +203,7 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused && mounted) {
       debugPrint("Removing CurrentChat imageData");
-      CurrentChat.of(context)?.imageData.clear();
+      CurrentChat.activeChat?.imageData.clear();
     }
   }
 
@@ -207,7 +211,6 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
   void dispose() {
     if (currentChat != null) {
       currentChat!.disposeControllers();
-      currentChat!.dispose();
     }
 
     // Switching chat to null will clear the currently active chat
@@ -301,8 +304,8 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
   }
 
   Widget buildScrollToBottomFAB(BuildContext context) {
-    if (currentChat != null &&
-        currentChat!.showScrollDown.value &&
+    if (CurrentChat.forGuid(chat!.guid!) != null &&
+        CurrentChat.forGuid(chat!.guid!)!.showScrollDown.value &&
         (SettingsManager().settings.skin.value == Skins.Material ||
             SettingsManager().settings.skin.value == Skins.Samsung)) {
       return Padding(
@@ -316,8 +319,8 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
           backgroundColor: Theme.of(context).accentColor,
         ),
       );
-    } else if (currentChat != null &&
-        currentChat!.showScrollDown.value &&
+    } else if (CurrentChat.forGuid(chat!.guid!) != null &&
+        CurrentChat.forGuid(chat!.guid!)!.showScrollDown.value &&
         SettingsManager().settings.skin.value == Skins.iOS) {
       return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Padding(
@@ -337,7 +340,7 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
                   padding: EdgeInsets.symmetric(horizontal: 10),
                   child: Center(
                     child: GestureDetector(
-                      onTap: currentChat!.scrollToBottom,
+                      onTap: CurrentChat.forGuid(chat!.guid!)!.scrollToBottom,
                       child: Text(
                         "\u{2193} Scroll to bottom \u{2193}",
                         textAlign: TextAlign.center,
@@ -476,51 +479,62 @@ class ConversationViewState extends State<ConversationView> with ConversationVie
                               ),
                             )
                                 : (searchQuery.length == 0 || !isCreator!) && chat != null
-                                ? Stack(
-                              alignment: Alignment.bottomCenter,
-                              children: [
-                                MessagesView(
-                                  key: new Key(chat?.guid ?? "unknown-chat"),
-                                  messageBloc: messageBloc,
-                                  showHandle: chat!.participants.length > 1,
-                                  chat: chat,
-                                  initComplete: widget.onMessagesViewComplete,
-                                ),
-                                currentChat != null
-                                    ? Obx(() => AnimatedOpacity(
-                                  duration: Duration(milliseconds: 250),
-                                  opacity: currentChat!.showScrollDown.value ? 1 : 0,
-                                  curve: Curves.easeInOut,
-                                  child: buildScrollToBottomFAB(context),
-                                ))
-                                    : Container(),
-                              ],
-                            )
+                                ? GetBuilder<CurrentChat>(
+                                  init: CurrentChat(
+                                    chat: chat!,
+                                  ),
+                                  autoRemove: false,
+                                  initState: (state) {
+                                    ChatBloc().currentChatGuids.add(chat!.guid!);
+                                  },
+                                  dispose: (state) {
+                                    ChatBloc().currentChatGuids.remove(chat!.guid!);
+                                  },
+                                  tag: chat!.guid,
+                                  builder: (controller) => CurrentChatInheritedWidget(
+                                    currentChat: controller,
+                                    child: Stack(
+                                      alignment: Alignment.bottomCenter,
+                                      children: [
+                                        MessagesView(
+                                          key: new Key(chat?.guid ?? "unknown-chat"),
+                                          messageBloc: messageBloc!,
+                                          currentChat: controller,
+                                          showHandle: chat!.participants.length > 1,
+                                          chat: chat!,
+                                          initComplete: widget.onMessagesViewComplete,
+                                        ),
+                                        CurrentChat.forGuid(chat!.guid!) != null
+                                            ? Obx(() => AnimatedOpacity(
+                                          duration: Duration(milliseconds: 250),
+                                          opacity: CurrentChat.forGuid(chat!.guid!)!.showScrollDown.value ? 1 : 0,
+                                          curve: Curves.easeInOut,
+                                          child: buildScrollToBottomFAB(context),
+                                        ))
+                                            : Container(),
+                                      ],
+                                    ),
+                                  )
+                                )
                                 : buildChatSelectorBody(),
                           ),
                         ),
-                        Obx(() {
-                          if (widget.onSelect == null) {
-                            if (SettingsManager().settings.swipeToCloseKeyboard.value ||
-                                SettingsManager().settings.swipeToOpenKeyboard.value) {
-                              return GestureDetector(
-                                  onPanUpdate: (details) {
-                                    if (SettingsManager().settings.swipeToCloseKeyboard.value &&
-                                        details.delta.dy > 0 &&
-                                        (currentChat?.keyboardOpen ?? false)) {
-                                      EventDispatcher().emit("unfocus-keyboard", null);
-                                    } else if (SettingsManager().settings.swipeToOpenKeyboard.value &&
-                                        details.delta.dy < 0 &&
-                                        !(currentChat?.keyboardOpen ?? false)) {
-                                      EventDispatcher().emit("focus-keyboard", null);
-                                    }
-                                  },
-                                  child: textField);
-                            }
-                            return textField;
-                          }
-                          return Container();
-                        }),
+                        widget.onSelect == null
+                            ? SettingsManager().settings.swipeToCloseKeyboard.value ||
+                            SettingsManager().settings.swipeToOpenKeyboard.value
+                            ? GestureDetector(
+                            onPanUpdate: (details) {
+                              if (SettingsManager().settings.swipeToCloseKeyboard.value &&
+                                  details.delta.dy > 0 &&
+                                  (currentChat?.keyboardOpen ?? false)) {
+                                EventDispatcher.instance.emit("unfocus-keyboard", null);
+                              } else if (SettingsManager().settings.swipeToOpenKeyboard.value &&
+                                  details.delta.dy < 0 &&
+                                  !(currentChat?.keyboardOpen ?? false)) {
+                                EventDispatcher.instance.emit("focus-keyboard", null);
+                              }
+                            },
+                            child: textField) : textField : Container(),
                       ]
                     ),
                     AnimatedPositioned(

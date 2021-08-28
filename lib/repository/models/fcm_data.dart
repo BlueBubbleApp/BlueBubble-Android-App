@@ -92,6 +92,7 @@ class FCMData {
         ConfigEntry(name: "clientID", value: this.clientID, type: this.clientID.runtimeType),
         ConfigEntry(name: "applicationID", value: this.applicationID, type: this.applicationID.runtimeType),
       ];
+
   bool get isNull =>
       this.projectID == null ||
       this.storageBucket == null ||

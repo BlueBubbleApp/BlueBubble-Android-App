@@ -32,15 +32,19 @@ import com.bluebubbles.messaging.method_call_handler.handlers.SetNextRestart;
 import com.bluebubbles.messaging.method_call_handler.handlers.OpenContactForm;
 import com.bluebubbles.messaging.method_call_handler.handlers.ViewContactForm;
 import com.bluebubbles.messaging.workers.DartWorker;
+import com.bluebubbles.messaging.services.FlutterFirebaseMessagingBackgroundExecutor;
 
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
-
+import static com.bluebubbles.messaging.MainActivity.engine;
+import android.util.Log;
 
 public class MethodCallHandler {
+    public static boolean isInitialized = false;
+
     @SuppressLint("RestrictedApi")
     @RequiresApi(api = Build.VERSION_CODES.P)
-    public static void methodCallHandler(MethodCall call, MethodChannel.Result result, Context context, DartWorker worker) {
+    public static void methodCallHandler(MethodCall call, MethodChannel.Result result, Context context, DartWorker worker, FlutterFirebaseMessagingBackgroundExecutor executor) {
         if (call.method.equals(FirebaseAuth.TAG)) {
             new FirebaseAuth(context, call, result).Handle();
         } else if (call.method.equals("close-background-isolate")) {
@@ -96,6 +100,16 @@ public class MethodCallHandler {
             new FailedToSend(context, call, result).Handle();
         } else if (call.method.equals(ClearFailedToSend.TAG)) {
             new ClearFailedToSend(context, call, result).Handle();
+        } else if (call.method.equals("MessagingBackground#initialized")) {
+            // This message is sent by the background method channel as soon as the background isolate
+            // is running. From this point forward, the Android side of this plugin can send
+            // callback handles through the background method channel, and the Dart side will execute
+            // the Dart methods corresponding to those callback handles.
+            if (executor != null) {
+                executor.onInitialized();
+            }
+            isInitialized = true;
+            result.success("");
         } else {
             result.notImplemented();
         }

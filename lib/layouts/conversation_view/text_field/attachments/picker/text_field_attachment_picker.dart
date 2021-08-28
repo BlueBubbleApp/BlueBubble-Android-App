@@ -2,12 +2,13 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:bluebubbles/helpers/share.dart';
-import 'package:bluebubbles/layouts/conversation_view/camera_widget.dart';
+import 'package:bluebubbles/helpers/utils.dart';
 import 'package:bluebubbles/layouts/conversation_view/text_field/attachments/picker/attachment_picked.dart';
 import 'package:bluebubbles/layouts/widgets/theme_switcher/theme_switcher.dart';
 import 'package:bluebubbles/managers/current_chat.dart';
 import 'package:bluebubbles/managers/life_cycle_manager.dart';
 import 'package:bluebubbles/managers/method_channel_interface.dart';
+import 'package:bluebubbles/managers/settings_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
@@ -32,7 +33,7 @@ class _TextFieldAttachmentPickerState extends State<TextFieldAttachmentPicker> w
     super.initState();
     getAttachments();
     // If the app is reopened, then update the attachments
-    LifeCycleManager().stream.listen((event) async {
+    LifeCycleManager.instance.stream.listen((event) async {
       if (event && widget.visible) getAttachments();
     });
   }
@@ -46,6 +47,26 @@ class _TextFieldAttachmentPickerState extends State<TextFieldAttachmentPicker> w
     }
 
     if (this.mounted) setState(() {});
+  }
+
+  Future<void> openFullCamera({String type: 'camera'}) async {
+    // Create a file that the camera can write to
+    String appDocPath = SettingsManager().appDocDir.path;
+    String ext = (type == 'video') ? ".mp4" : ".png";
+    File file = new File("$appDocPath/attachments/" + randomString(16) + ext);
+    await file.create(recursive: true);
+
+    // Take the picture after opening the camera
+    await MethodChannelInterface().invokeMethod("open-camera", {"path": file.path, "type": type});
+
+    // If we don't get data back, return outta here
+    if (!file.existsSync()) return;
+    if (file.statSync().size == 0) {
+      file.deleteSync();
+      return;
+    }
+
+    widget.onAddAttachment(file);
   }
 
   @override
@@ -70,7 +91,7 @@ class _TextFieldAttachmentPickerState extends State<TextFieldAttachmentPicker> w
                       slivers: <Widget>[
                         SliverToBoxAdapter(
                           child: Padding(
-                            padding: EdgeInsets.only(left: 5, right: 10, top: 5, bottom: 5),
+                            padding: EdgeInsets.only(left: 5, right: 5, top: 5, bottom: 5),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: <Widget>[
@@ -198,12 +219,90 @@ class _TextFieldAttachmentPickerState extends State<TextFieldAttachmentPicker> w
                         ),
                         SliverToBoxAdapter(
                           child: Padding(
-                              padding: EdgeInsets.only(top: 5, bottom: 5, right: 5),
-                              child: CameraWidget(
-                                addAttachment: (File attachment) {
-                                  widget.onAddAttachment(attachment);
-                                },
-                              )),
+                            padding: EdgeInsets.only(left: 5, right: 10, top: 5, bottom: 5),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: <Widget>[
+                                Flexible(
+                                  fit: FlexFit.loose,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minWidth: 90,
+                                    ),
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        primary: Theme.of(context).accentColor,
+                                      ),
+                                      onPressed: () async {
+                                        openFullCamera();
+                                      },
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: <Widget>[
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Icon(
+                                              Icons.photo_camera,
+                                              color: Theme.of(context).textTheme.bodyText1!.color,
+                                            ),
+                                          ),
+                                          Text(
+                                            "Camera",
+                                            style: TextStyle(
+                                              color: Theme.of(context).textTheme.bodyText1!.color,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Container(height: 10),
+                                Flexible(
+                                  fit: FlexFit.loose,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minWidth: 90,
+                                    ),
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        primary: Theme.of(context).accentColor,
+                                      ),
+                                      onPressed: () async {
+                                        openFullCamera(type: "video");
+                                      },
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: <Widget>[
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Icon(
+                                              Icons.videocam,
+                                              color: Theme.of(context).textTheme.bodyText1!.color,
+                                            ),
+                                          ),
+                                          Text(
+                                            "Video",
+                                            style: TextStyle(
+                                              color: Theme.of(context).textTheme.bodyText1!.color,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                         SliverGrid(
                           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -212,7 +311,7 @@ class _TextFieldAttachmentPickerState extends State<TextFieldAttachmentPicker> w
                           delegate: SliverChildBuilderDelegate(
                                 (context, index) {
                               AssetEntity element = _images[index];
-                              return AttachmentPicked(
+                              return GalleryAttachment(
                                 key: Key("attachmentPicked" + _images[index].id),
                                 data: element,
                                 onTap: () async {

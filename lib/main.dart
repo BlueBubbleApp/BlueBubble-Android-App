@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:adaptive_theme/adaptive_theme.dart';
 import 'package:bluebubbles/helpers/attachment_downloader.dart';
 import 'package:bluebubbles/helpers/constants.dart';
+import 'package:bluebubbles/helpers/logger.dart';
 import 'package:bluebubbles/helpers/utils.dart';
 import 'package:bluebubbles/layouts/conversation_list/conversation_list.dart';
 import 'package:bluebubbles/layouts/conversation_view/conversation_view.dart';
@@ -23,15 +24,13 @@ import 'package:bluebubbles/layouts/setup/setup_view.dart';
 import 'package:bluebubbles/layouts/testing_mode.dart';
 import 'package:bluebubbles/layouts/widgets/theme_switcher/theme_switcher.dart';
 import 'package:bluebubbles/managers/background_isolate.dart';
+import 'package:bluebubbles/managers/event_dispatcher.dart';
 import 'package:bluebubbles/managers/life_cycle_manager.dart';
 import 'package:bluebubbles/managers/method_channel_interface.dart';
-import 'package:bluebubbles/managers/navigator_manager.dart';
 import 'package:bluebubbles/managers/notification_manager.dart';
 import 'package:bluebubbles/managers/settings_manager.dart';
 import 'package:bluebubbles/repository/database.dart';
 import 'package:bluebubbles/repository/models/theme_object.dart';
-// import 'package:sentry/sentry.dart';
-
 import 'package:bluebubbles/socket_manager.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -90,7 +89,7 @@ class MyHttpOverrides extends HttpOverrides {
   }
 }
 
-Future<Null> main() async {
+main() async {
   HttpOverrides.global = new MyHttpOverrides();
 
   // This captures errors reported by the Flutter framework.
@@ -111,8 +110,11 @@ Future<Null> main() async {
     await DBProvider.db.initDB();
     await initializeDateFormatting('fr_FR', null);
     await SettingsManager().init();
-    await SettingsManager().getSavedSettings(headless: true);
+    await SettingsManager().getSavedSettings();
     Get.put(AttachmentDownloadService());
+    Get.put(Logger());
+    Get.put(LifeCycleManager());
+    Get.put(EventDispatcher());
   } catch (e) {
     exception = e;
   }
@@ -172,15 +174,12 @@ class Main extends StatelessWidget with WidgetsBindingObserver {
         /// Set the dark theme from the [AdaptiveTheme]
         darkTheme: darkTheme.copyWith(appBarTheme: darkTheme.appBarTheme.copyWith(elevation: 0.0)),
 
-        /// [NavigatorManager] is set as the navigator key so that we can control navigation from anywhere
-        navigatorKey: NavigatorManager().navigatorKey,
-
         /// [Home] is the starting widget for the app
         home: Home(),
 
         builder: (context, child) => SecureApplication(
           child: Builder(builder: (context) {
-            if (SettingsManager().canAuthenticate && !LifeCycleManager().isAlive) {
+            if (SettingsManager().canAuthenticate && !LifeCycleManager.instance.isAlive) {
               if (SettingsManager().settings.shouldSecure.value) {
                 SecureApplicationProvider.of(context, listen: false)!.lock();
                 if (SettingsManager().settings.securityLevel.value == SecurityLevel.locked_and_secured) {
@@ -288,7 +287,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     MethodChannelInterface().init();
 
     // We initialize the [LifeCycleManager] so that it is open, because [initState] occurs when the app is opened
-    LifeCycleManager().opened();
+    LifeCycleManager.instance.opened();
 
     // This initialization sets the function address in the native code to be used later
     BackgroundIsolateInterface.initialize();
@@ -392,9 +391,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Call the [LifeCycleManager] events based on the [state]
     if (state == AppLifecycleState.paused) {
-      LifeCycleManager().close();
+      LifeCycleManager.instance.close();
     } else if (state == AppLifecycleState.resumed) {
-      LifeCycleManager().opened();
+      LifeCycleManager.instance.opened();
     }
   }
 

@@ -102,7 +102,7 @@ class AttachmentHelper {
     // Parse emails from results
     for (dynamic email in _contact.typedEmail) {
       String label = "HOME";
-      if (email.length > 1 && email[1].length > 0 && email[1][1] != null) {
+      if (email.length > 1 && email[1].length > 1 && email[1][1] != null) {
         label = email[1][1] ?? label;
       }
 
@@ -112,7 +112,7 @@ class AttachmentHelper {
     // Parse phone numbers from results
     for (dynamic phone in _contact.typedTelephone) {
       String label = "HOME";
-      if (phone.length > 1 && phone[1].length > 0 && phone[1][1] != null) {
+      if (phone.length > 1 && phone[1].length > 1 && phone[1][1] != null) {
         label = phone[1][1] ?? label;
       }
 
@@ -127,7 +127,7 @@ class AttachmentHelper {
       String country = address[0].length > 3 ? address[0][3] : '';
 
       String label = "HOME";
-      if (address.length > 1 && address[1].length > 0 && address[1][1] != null) {
+      if (address.length > 1 && address[1].length > 1 && address[1][1] != null) {
         label = address[1][1] ?? label;
       }
 

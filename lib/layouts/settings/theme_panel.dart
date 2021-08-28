@@ -269,6 +269,7 @@ class ThemePanel extends GetView<ThemePanelController> {
                             if (val == null) return;
                             controller.currentMode.value = val;
                             controller._settingsCopy.refreshRate.value = controller.currentMode.value;
+                            await FlutterDisplayMode.setPreferredMode(await controller._settingsCopy.getDisplayMode());
                             saveSettings();
                           },
                           options: controller.refreshRates,

@@ -17,7 +17,32 @@ import 'package:bluebubbles/repository/models/attachment.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-class MessageAttachment extends StatefulWidget {
+class AttachmentLifecycleController extends GetxController {
+  final Rxn<dynamic> content = Rxn<dynamic>();
+  final Attachment attachment;
+  AttachmentLifecycleController({required this.attachment});
+  
+  @override
+  void onInit() {
+    updateContent();
+    super.onInit();
+  }
+
+  void updateContent() async {
+    content.value = AttachmentHelper.getContent(attachment,
+        path: attachment.guid == "redacted-mode-demo-attachment" ||
+            attachment.guid!.contains("theme-selector")
+            ? attachment.transferName
+            : null);
+
+    // If we can download it, do so
+    if (await AttachmentHelper.canAutoDownload() && content.value is Attachment) {
+      content.value = Get.put(AttachmentDownloadController(attachment: content.value), tag: content.value.guid);
+    }
+  }
+}
+
+class MessageAttachment extends StatelessWidget {
   MessageAttachment({
     Key? key,
     required this.attachment,
@@ -29,179 +54,131 @@ class MessageAttachment extends StatefulWidget {
   final bool isFromMe;
 
   @override
-  MessageAttachmentState createState() => MessageAttachmentState();
-}
-
-class MessageAttachmentState extends State<MessageAttachment> with AutomaticKeepAliveClientMixin {
-  Widget? attachmentWidget;
-  var content;
-
-  @override
-  void initState() {
-    super.initState();
-    updateContent();
-  }
-
-  void updateContent() async {
-    // Ge the current attachment content (status)
-    content = AttachmentHelper.getContent(widget.attachment,
-        path: widget.attachment.guid == "redacted-mode-demo-attachment" ||
-                widget.attachment.guid!.contains("theme-selector")
-            ? widget.attachment.transferName
-            : null);
-
-    // If we can download it, do so
-    if (await AttachmentHelper.canAutoDownload() && content is Attachment) {
-      if (this.mounted) {
-        setState(() {
-          content = Get.put(AttachmentDownloadController(attachment: content), tag: content.guid);
-        });
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    super.build(context);
-    updateContent();
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: context.width * 0.5,
-          maxHeight: context.height * 0.6,
-        ),
-        child: _buildAttachmentWidget(),
+    return GetBuilder<AttachmentLifecycleController>(
+      init: AttachmentLifecycleController(
+        attachment: attachment,
       ),
+      global: false,
+      tag: attachment.guid,
+      builder: (controller) => ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: context.width * 0.5,
+            maxHeight: context.height * 0.6,
+          ),
+          child: Obx(() => _buildAttachmentWidget(controller, context)),
+        ),
+      )
     );
   }
 
-  Widget _buildAttachmentWidget() {
+  Widget _buildAttachmentWidget(AttachmentLifecycleController controller, BuildContext context) {
     // If it's a file, it's already been downlaoded, so just display it
-    if (content is File) {
-      String? mimeType = widget.attachment.mimeType;
+    if (controller.content.value is File || (controller.content.value is AttachmentDownloadController && controller.content.value.file.value != null)) {
+      File file = controller.content.value is File ? controller.content.value : controller.content.value.file.value;
+      String? mimeType = attachment.mimeType;
       if (mimeType != null) mimeType = mimeType.substring(0, mimeType.indexOf("/"));
-      if (mimeType == "image" && !widget.attachment.mimeType!.endsWith("tiff")) {
+      if (mimeType == "image" && !attachment.mimeType!.endsWith("tiff")) {
         return MediaFile(
-          attachment: widget.attachment,
+          attachment: attachment,
           child: ImageWidget(
-            file: content,
-            attachment: widget.attachment,
+            file: file,
+            attachment: attachment,
           ),
         );
       } else if (mimeType == "video") {
         return MediaFile(
-          attachment: widget.attachment,
+          attachment: attachment,
           child: VideoWidget(
-            attachment: widget.attachment,
-            file: content,
+            attachment: attachment,
+            file: file,
           ),
         );
-      } else if (mimeType == "audio" && !widget.attachment.mimeType!.contains("caf")) {
+      } else if (mimeType == "audio" && !attachment.mimeType!.contains("caf")) {
         return MediaFile(
-          attachment: widget.attachment,
-          child: AudioPlayerWiget(file: content, context: context, width: 250, isFromMe: widget.isFromMe),
+          attachment: attachment,
+          child: AudioPlayerWidget(file: file, width: 250, isFromMe: isFromMe),
         );
-      } else if (widget.attachment.mimeType == "text/x-vlocation" || widget.attachment.uti == 'public.vlocation') {
+      } else if (attachment.mimeType == "text/x-vlocation" || attachment.uti == 'public.vlocation') {
         return MediaFile(
-          attachment: widget.attachment,
+          attachment: attachment,
           child: LocationWidget(
-            file: content,
-            attachment: widget.attachment,
+            file: file,
+            attachment: attachment,
           ),
         );
-      } else if (widget.attachment.mimeType == "text/vcard") {
+      } else if (attachment.mimeType == "text/vcard") {
         return MediaFile(
-          attachment: widget.attachment,
+          attachment: attachment,
           child: ContactWidget(
-            file: content,
-            attachment: widget.attachment,
+            file: file,
+            attachment: attachment,
           ),
         );
-      } else if (widget.attachment.mimeType == null) {
+      } else if (attachment.mimeType == null) {
         return Container();
       } else {
         return MediaFile(
-          attachment: widget.attachment,
+          attachment: attachment,
           child: RegularFileOpener(
-            file: content,
-            attachment: widget.attachment,
+            file: file,
+            attachment: attachment,
           ),
         );
       }
 
       // If it's an attachment, then it needs to be manually downloaded
-    } else if (content is Attachment) {
+    } else if (controller.content.value is Attachment || (controller.content.value is AttachmentDownloadController && controller.content.value.error.value)) {
+      Attachment attachment2 = controller.content.value is Attachment ? controller.content.value : attachment;
       return AttachmentDownloaderWidget(
         onPressed: () {
-          content = Get.put(AttachmentDownloadController(attachment: content), tag: content.guid);
-          if (this.mounted) setState(() {});
+          controller.content.value = Get.put(AttachmentDownloadController(attachment: attachment2), tag: attachment2.guid);
         },
-        attachment: content,
-        placeHolder: buildPlaceHolder(widget),
+        attachment: attachment2,
+        placeHolder: buildPlaceHolder(context),
       );
 
       // If it's an AttachmentDownloader, it is currently being downloaded
-    } else if (content is AttachmentDownloadController) {
-      if (widget.attachment.mimeType == null) return Container();
-      return Obx(() {
-        // If there is an error, return an error text
-        if (content.error.value) {
-          content = widget.attachment;
-          return AttachmentDownloaderWidget(
-            onPressed: () {
-              content = Get.put(AttachmentDownloadController(attachment: content), tag: content.guid);
-              if (this.mounted) setState(() {});
-            },
-            attachment: content,
-            placeHolder: buildPlaceHolder(widget),
-          );
-        }
-
-        // If the snapshot data is a file, we have finished downloading
-        if (content.file.value != null) {
-          content = content.file.value;
-          return _buildAttachmentWidget();
-        }
-
-        return Stack(
-          alignment: Alignment.center,
-          children: <Widget>[
-            buildPlaceHolder(widget),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Center(
-                      child: Container(
-                        height: 40,
-                        width: 40,
-                        child: CircleProgressBar(
-                          value: content.progress.value?.toDouble() ?? 0,
-                          backgroundColor: Colors.grey,
-                          foregroundColor: Colors.white,
-                        ),
+    } else if (controller.content.value is AttachmentDownloadController) {
+      if (attachment.mimeType == null) return Container();
+      return Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          buildPlaceHolder(context),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Center(
+                    child: Container(
+                      height: 40,
+                      width: 40,
+                      child: CircleProgressBar(
+                        value: controller.content.value.progress.value?.toDouble() ?? 0,
+                        backgroundColor: Colors.grey,
+                        foregroundColor: Colors.white,
                       ),
                     ),
-                    ((content as AttachmentDownloadController).attachment.mimeType != null)
-                        ? Container(height: 5.0)
-                        : Container(),
-                    (content.attachment.mimeType != null)
-                        ? Text(
-                            content.attachment.mimeType,
-                            style: Theme.of(context).textTheme.bodyText1,
-                          )
-                        : Container()
-                  ],
-                ),
-              ],
-            ),
-          ],
-        );
-      });
+                  ),
+                  ((controller.content.value as AttachmentDownloadController).attachment.mimeType != null)
+                      ? Container(height: 5.0)
+                      : Container(),
+                  (controller.content.value.attachment.mimeType != null)
+                      ? Text(
+                    controller.content.value.attachment.mimeType,
+                    style: Theme.of(context).textTheme.bodyText1,
+                  )
+                      : Container()
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
     } else {
       return Text(
         "Error loading",
@@ -211,10 +188,7 @@ class MessageAttachmentState extends State<MessageAttachment> with AutomaticKeep
     }
   }
 
-  Widget buildPlaceHolder(MessageAttachment parent) {
-    return buildImagePlaceholder(context, widget.attachment, Container());
+  Widget buildPlaceHolder(BuildContext context) {
+    return buildImagePlaceholder(context, attachment, Container());
   }
-
-  @override
-  bool get wantKeepAlive => true;
 }

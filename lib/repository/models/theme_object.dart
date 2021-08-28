@@ -5,6 +5,7 @@ import 'package:bluebubbles/helpers/constants.dart';
 import 'package:bluebubbles/helpers/themes.dart';
 import 'package:bluebubbles/repository/database.dart';
 import 'package:bluebubbles/repository/models/theme_entry.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -23,9 +24,10 @@ class ThemeObject {
     this.selectedDarkTheme = false,
     this.data,
   });
-  factory ThemeObject.fromData(ThemeData data, String name, {bool isPreset = false}) {
+
+  factory ThemeObject.fromData(ThemeData data, String name) {
     ThemeObject object = new ThemeObject(
-      data: data.copyWith(),
+      data: data,
       name: name,
     );
     object.entries = object.toEntries();
@@ -95,8 +97,8 @@ class ThemeObject {
     if (this.isPreset) return;
     final Database db = await DBProvider.db.database;
 
-    if (this.id == null) await this.save(updateIfAbsent: false);
-    await this.fetchData();
+    if (this.id == null) return;
+    if (entries.isEmpty) await this.fetchData();
     for (ThemeEntry entry in this.entries) {
       await db.delete("theme_values", where: "ROWID = ?", whereArgs: [entry.id]);
     }
@@ -127,22 +129,21 @@ class ThemeObject {
 
   static Future<ThemeObject> getLightTheme() async {
     List<ThemeObject> res = await ThemeObject.getThemes();
-    List<ThemeObject> themes = res.where((element) => element.selectedLightTheme).toList();
-    if (themes.isEmpty) {
+    ThemeObject? theme = res.firstWhereOrNull((element) => element.selectedLightTheme);
+    if (theme == null) {
       return Themes.themes[1];
     }
-    ThemeObject theme = themes.first;
-    await theme.fetchData();
+    if (theme.entries.isEmpty) await theme.fetchData();
     return theme;
   }
 
   static Future<ThemeObject> getDarkTheme() async {
     List<ThemeObject> res = await ThemeObject.getThemes();
-    List<ThemeObject> themes = res.where((element) => element.selectedDarkTheme).toList();
-    if (themes.isEmpty) {
+    ThemeObject? theme = res.firstWhereOrNull((element) => element.selectedDarkTheme);
+    if (theme == null) {
       return Themes.themes[0];
     }
-    ThemeObject theme = themes.first;
+    if (theme.entries.isEmpty) await theme.fetchData();
     await theme.fetchData();
     return theme;
   }

@@ -9,42 +9,27 @@ import 'package:flutter/material.dart';
 import 'package:tuple/tuple.dart';
 import 'package:video_player/video_player.dart';
 
-class AudioPlayerWiget extends StatefulWidget {
-  AudioPlayerWiget({
-    Key? key,
-    required this.file,
-    required this.context,
-    this.isFromMe = false,
-    this.width,
-  }) : super(key: key);
-
-  final File file;
-  final BuildContext context;
-  final double? width;
-  final bool isFromMe;
-
-  @override
-  _AudioPlayerWigetState createState() => _AudioPlayerWigetState();
-}
-
-class _AudioPlayerWigetState extends State<AudioPlayerWiget> with AutomaticKeepAliveClientMixin {
+class AudioPlayerWidgetController extends GetxController {
   late final ChewieAudioController controller;
   late final VideoPlayerController audioController;
-
+  final BuildContext context;
+  final File file;
+  final bool isFromMe;
+  AudioPlayerWidgetController({
+    required this.context,
+    required this.file,
+    required this.isFromMe,
+  });
+  
   @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-
-    CurrentChat? thisChat = CurrentChat.of(widget.context);
-    if (thisChat != null && thisChat.audioPlayers.containsKey(widget.file.path)) {
-      audioController = thisChat.audioPlayers[widget.file.path]!.item2;
-      controller = thisChat.audioPlayers[widget.file.path]!.item1;
+  void onInit() {
+    CurrentChat? thisChat = CurrentChat.of(context);
+    if (thisChat != null && thisChat.audioPlayers.containsKey(file.path)) {
+      audioController = thisChat.audioPlayers[file.path]!.item2;
+      controller = thisChat.audioPlayers[file.path]!.item1;
     } else {
       audioController = VideoPlayerController.file(
-        widget.file,
+        file,
       );
       controller = ChewieAudioController(
         videoPlayerController: audioController,
@@ -54,31 +39,40 @@ class _AudioPlayerWigetState extends State<AudioPlayerWiget> with AutomaticKeepA
         showControls: true,
         autoInitialize: true,
         materialProgressColors: ChewieProgressColors(
-            playedColor: Theme.of(widget.context).primaryColor,
-            handleColor: Theme.of(widget.context).primaryColor,
-            bufferedColor: Theme.of(widget.context).backgroundColor,
-            backgroundColor: Theme.of(widget.context).disabledColor),
+            playedColor: Theme.of(context).primaryColor,
+            handleColor: Theme.of(context).primaryColor,
+            bufferedColor: Theme.of(context).backgroundColor,
+            backgroundColor: Theme.of(context).disabledColor),
         cupertinoProgressColors: ChewieProgressColors(
-            playedColor: Theme.of(widget.context).primaryColor,
-            handleColor: Theme.of(widget.context).primaryColor,
-            bufferedColor: Theme.of(widget.context).backgroundColor,
-            backgroundColor: Theme.of(widget.context).disabledColor),
-        cupertinoBackgroundColor: Theme.of(widget.context).accentColor,
-        cupertinoIconColor: Theme.of(widget.context).textTheme.bodyText1?.color,
-        cupertinoColumnAlignment: widget.isFromMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            playedColor: Theme.of(context).primaryColor,
+            handleColor: Theme.of(context).primaryColor,
+            bufferedColor: Theme.of(context).backgroundColor,
+            backgroundColor: Theme.of(context).disabledColor),
+        cupertinoBackgroundColor: Theme.of(context).accentColor,
+        cupertinoIconColor: Theme.of(context).textTheme.bodyText1?.color,
+        cupertinoColumnAlignment: isFromMe ? MainAxisAlignment.end : MainAxisAlignment.start,
       );
 
-      thisChat = CurrentChat.of(widget.context);
+      thisChat = CurrentChat.of(context);
       if (thisChat != null) {
-        CurrentChat.of(widget.context)!.audioPlayers[widget.file.path] = Tuple2(controller, audioController);
+        CurrentChat.of(context)!.audioPlayers[file.path] = Tuple2(controller, audioController);
       }
     }
+    super.onInit();
   }
+}
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
+class AudioPlayerWidget extends StatelessWidget {
+  AudioPlayerWidget({
+    Key? key,
+    required this.file,
+    this.isFromMe = false,
+    this.width,
+  }) : super(key: key);
+
+  final File file;
+  final double? width;
+  final bool isFromMe;
 
   String formatDuration(Duration duration) {
     String minutes = duration.inMinutes.toString();
@@ -91,25 +85,34 @@ class _AudioPlayerWigetState extends State<AudioPlayerWiget> with AutomaticKeepA
 
   @override
   Widget build(BuildContext context) {
-    double maxWidth = widget.width ?? context.width - 20;
-    if (!(ModalRoute.of(context)?.isCurrent ?? false)) {
-      controller.pause();
-    }
-    super.build(context);
-    return Container(
-      alignment: Alignment.center,
-      color: Theme.of(context).accentColor,
-      height: SettingsManager().settings.skin.value == Skins.iOS ? 75 : 48,
-      constraints: new BoxConstraints(maxWidth: maxWidth),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-            platform: SettingsManager().settings.skin.value == Skins.iOS ? TargetPlatform.iOS : TargetPlatform.android,
-            dialogBackgroundColor: Theme.of(context).accentColor,
-            iconTheme: Theme.of(context).iconTheme.copyWith(color: Theme.of(context).textTheme.bodyText1?.color)),
-        child: ChewieAudio(
-          controller: controller,
-        ),
+    return GetBuilder<AudioPlayerWidgetController>(
+      init: AudioPlayerWidgetController(
+        context: context,
+        file: file,
+        isFromMe: isFromMe,
       ),
+      global: false,
+      builder: (controller) {
+        double maxWidth = width ?? context.width - 20;
+        if (!(ModalRoute.of(context)?.isCurrent ?? false)) {
+          controller.controller.pause();
+        }
+        return Container(
+          alignment: Alignment.center,
+          color: Theme.of(context).accentColor,
+          height: SettingsManager().settings.skin.value == Skins.iOS ? 75 : 48,
+          constraints: new BoxConstraints(maxWidth: maxWidth),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+                platform: SettingsManager().settings.skin.value == Skins.iOS ? TargetPlatform.iOS : TargetPlatform.android,
+                dialogBackgroundColor: Theme.of(context).accentColor,
+                iconTheme: Theme.of(context).iconTheme.copyWith(color: Theme.of(context).textTheme.bodyText1?.color)),
+            child: ChewieAudio(
+              controller: controller.controller,
+            ),
+          ),
+        );
+      }
     );
   }
 }

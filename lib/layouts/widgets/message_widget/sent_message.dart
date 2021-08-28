@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:bluebubbles/helpers/ui_helpers.dart';
 import 'package:bluebubbles/layouts/setup/theme_selector/theme_selector.dart';
 import 'package:bluebubbles/managers/notification_manager.dart';
 import 'package:get/get.dart';
@@ -98,7 +99,7 @@ class SentMessageHelper {
               return Container(
                 width: customWidth != null ? constraints.maxWidth : null,
                 constraints: customWidth == null ? BoxConstraints(
-                  maxWidth: context.width * MessageWidgetMixin.MAX_SIZE + (!padding ? 100 : 0),
+                  maxWidth: context.width * MessageWidgetHelper.MAX_SIZE + (!padding ? 100 : 0),
                 ) : null,
                 margin: EdgeInsets.only(
                   top: hasReactions && margin ? 18 : 0,
@@ -139,7 +140,7 @@ class SentMessageHelper {
                 child: customContent == null
                     ? RichText(
                   text: TextSpan(
-                    children: MessageWidgetMixin.buildMessageSpans(context, message),
+                    children: MessageWidgetHelper.buildMessageSpans(context, message),
                     style: Theme.of(context).textTheme.bodyText2!.apply(color: Colors.white),
                   ),
                 )
@@ -155,7 +156,7 @@ class SentMessageHelper {
     return Container(
       width: customWidth != null ? customWidth - (showTail ? 20 : 0) : null,
       constraints: BoxConstraints(
-        maxWidth: customWidth != null ? customWidth - (showTail ? 20 : 0) : context.width * MessageWidgetMixin.MAX_SIZE + (!padding ? 100 : 0) + 20,
+        maxWidth: customWidth != null ? customWidth - (showTail ? 20 : 0) : context.width,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -250,7 +251,7 @@ class SentMessageHelper {
   }
 }
 
-class SentMessage extends StatefulWidget {
+class SentMessage extends StatelessWidget {
   final bool showTail;
   final Message message;
   final Message? olderMessage;
@@ -264,6 +265,7 @@ class SentMessage extends StatefulWidget {
   final Widget attachmentsWidget;
   final Widget reactionsWidget;
   final Widget urlPreviewWidget;
+  final Rx<Skins> skin = Rx<Skins>(SettingsManager().settings.skin.value);
 
   SentMessage({
     Key? key,
@@ -283,19 +285,6 @@ class SentMessage extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _SentMessageState createState() => _SentMessageState();
-}
-
-class _SentMessageState extends State<SentMessage> with TickerProviderStateMixin, MessageWidgetMixin {
-  final Rx<Skins> skin = Rx<Skins>(SettingsManager().settings.skin.value);
-
-  @override
-  void initState() {
-    super.initState();
-    initMessageState(widget.message, false);
-  }
-
-  @override
   Widget build(BuildContext context) {
     if (Skin.of(context) != null) {
       skin.value = Skin.of(context)!.skin;
@@ -304,73 +293,73 @@ class _SentMessageState extends State<SentMessage> with TickerProviderStateMixin
     List<Widget> messageColumn = [];
 
     // Second, add the attachments
-    if (isEmptyString(widget.message.fullText)) {
+    if (isEmptyString(message.fullText)) {
       messageColumn.add(
         addStickersToWidget(
           message: addReactionsToWidget(
-              messageWidget: widget.attachmentsWidget, reactions: widget.reactionsWidget, message: widget.message),
-          stickers: widget.stickersWidget,
-          isFromMe: widget.message.isFromMe!,
+              messageWidget: attachmentsWidget, reactions: reactionsWidget, message: message),
+          stickers: stickersWidget,
+          isFromMe: message.isFromMe!,
         ),
       );
     } else {
-      messageColumn.add(widget.attachmentsWidget);
+      messageColumn.add(attachmentsWidget);
     }
 
     // Third, let's add the message or URL preview
-    Widget? message;
-    if (widget.message.balloonBundleId != null &&
-        widget.message.balloonBundleId != 'com.apple.messages.URLBalloonProvider') {
-      message = BalloonBundleWidget(message: widget.message);
-    } else if (!isEmptyString(widget.message.text)) {
-      message = SentMessageHelper.buildMessageWithTail(
-          context, widget.message, widget.showTail, widget.message.hasReactions, widget.message.bigEmoji ?? false,
-          olderMessage: widget.olderMessage);
-      if (widget.showHero) {
-        message = Hero(
+    Widget? messageWidget;
+    if (message.balloonBundleId != null &&
+        message.balloonBundleId != 'com.apple.messages.URLBalloonProvider') {
+      messageWidget = BalloonBundleWidget(message: message);
+    } else if (!isEmptyString(message.text)) {
+      messageWidget = SentMessageHelper.buildMessageWithTail(
+          context, message, showTail, message.hasReactions, message.bigEmoji ?? false,
+          olderMessage: olderMessage);
+      if (showHero) {
+        messageWidget = Hero(
           tag: "first",
           child: Material(
             type: MaterialType.transparency,
-            child: message,
+            child: messageWidget,
           ),
         );
       }
-      if (widget.message.hasUrl()) {
-        message = Column(
+      if (message.hasUrl()) {
+        messageWidget = Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Padding(
               padding: EdgeInsets.only(right: 5.0),
-              child: widget.urlPreviewWidget,
+              child: urlPreviewWidget,
             ),
-            message,
+            messageWidget,
           ]
         );
       }
     }
 
     // Fourth, let's add any reactions or stickers to the widget
-    if (message != null) {
+    if (messageWidget != null) {
       messageColumn.add(
         addStickersToWidget(
           message: addReactionsToWidget(
               messageWidget: Padding(
-                padding: EdgeInsets.only(bottom: widget.showTail ? 2.0 : 0),
-                child: message,
+                padding: EdgeInsets.only(bottom: showTail ? 2.0 : 0),
+                child: messageWidget,
               ),
-              reactions: widget.reactionsWidget,
-              message: widget.message),
-          stickers: widget.stickersWidget,
-          isFromMe: widget.message.isFromMe!,
+              reactions: reactionsWidget,
+              message: message),
+          stickers: stickersWidget,
+          isFromMe: message.isFromMe!,
         ),
       );
     }
     messageColumn.add(
       DeliveredReceipt(
-        message: widget.message,
-        showDeliveredReceipt: widget.showDeliveredReceipt,
-        shouldAnimate: widget.shouldFadeIn,
+        message: message,
+        showDeliveredReceipt: showDeliveredReceipt,
+        shouldAnimate: shouldFadeIn,
       ),
     );
 
@@ -385,7 +374,7 @@ class _SentMessageState extends State<SentMessage> with TickerProviderStateMixin
         // Padding to shift the bubble up a bit, relative to the avatar
         padding: EdgeInsets.only(
             top: (skin.value != Skins.iOS &&
-                    widget.message.isFromMe == widget.olderMessage?.isFromMe)
+                    message.isFromMe == olderMessage?.isFromMe)
                 ? (skin.value != Skins.iOS)
                     ? 0
                     : 3
@@ -393,11 +382,11 @@ class _SentMessageState extends State<SentMessage> with TickerProviderStateMixin
                     ? 0.0
                     : 10,
             bottom: (skin.value == Skins.iOS &&
-                    widget.showTail &&
-                    !isEmptyString(widget.message.fullText))
+                    showTail &&
+                    !isEmptyString(message.fullText))
                 ? 5.0
                 : 0,
-            right: isEmptyString(widget.message.fullText) && widget.message.error.value == 0 ? 10.0 : 0.0),
+            right: isEmptyString(message.fullText) && message.error.value == 0 ? 10.0 : 0.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -413,9 +402,9 @@ class _SentMessageState extends State<SentMessage> with TickerProviderStateMixin
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         MessagePopupHolder(
-          message: widget.message,
-          olderMessage: widget.olderMessage,
-          newerMessage: widget.newerMessage,
+          message: message,
+          olderMessage: olderMessage,
+          newerMessage: newerMessage,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.end,
@@ -429,9 +418,9 @@ class _SentMessageState extends State<SentMessage> with TickerProviderStateMixin
             children: msgRow,
           ),
         ),
-        if (skin.value != Skins.Samsung && widget.message.guid != widget.olderMessage?.guid)
+        if (skin.value != Skins.Samsung && message.guid != olderMessage?.guid)
           MessageTimeStamp(
-            message: widget.message,
+            message: message,
           )
       ],
     );

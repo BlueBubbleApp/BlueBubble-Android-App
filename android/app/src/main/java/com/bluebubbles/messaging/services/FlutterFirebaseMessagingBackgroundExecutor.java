@@ -15,9 +15,7 @@ import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.embedding.engine.dart.DartExecutor.DartCallback;
 import io.flutter.embedding.engine.plugins.shim.ShimPluginRegistry;
 import io.flutter.plugin.common.BinaryMessenger;
-import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
-import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.view.FlutterCallbackInformation;
 import java.util.Arrays;
@@ -29,6 +27,7 @@ import static com.bluebubbles.messaging.method_call_handler.handlers.InitializeB
 import static com.bluebubbles.messaging.method_call_handler.handlers.InitializeBackgroundHandle.BACKGROUND_HANDLE_SHARED_PREF_KEY;
 
 import com.bluebubbles.messaging.MainActivity;
+import com.bluebubbles.messaging.method_call_handler.MethodCallHandler;
 import com.bluebubbles.messaging.method_call_handler.handlers.AlarmScheduler;
 import com.bluebubbles.messaging.method_call_handler.handlers.ClearChatNotifs;
 import com.bluebubbles.messaging.method_call_handler.handlers.ClearFailedToSend;
@@ -53,12 +52,13 @@ import com.bluebubbles.messaging.method_call_handler.handlers.SetNextRestart;
 import com.bluebubbles.messaging.method_call_handler.handlers.OpenContactForm;
 import com.bluebubbles.messaging.method_call_handler.handlers.ViewContactForm;
 import com.bluebubbles.messaging.workers.DartWorker;
+import static com.bluebubbles.messaging.MainActivity.engine;
 
 /**
  * An background execution abstraction which handles initializing a background isolate running a
  * callback dispatcher, used to invoke Dart callbacks while backgrounded.
  */
-public class FlutterFirebaseMessagingBackgroundExecutor implements MethodCallHandler {
+public class FlutterFirebaseMessagingBackgroundExecutor {
     private static final String TAG = "FLTFireBGExecutor";
 
     private final AtomicBoolean isCallbackDispatcherReady = new AtomicBoolean(false);
@@ -67,8 +67,6 @@ public class FlutterFirebaseMessagingBackgroundExecutor implements MethodCallHan
      * Dart isolate that was created by this plugin.
      */
     private MethodChannel backgroundChannel;
-
-    private FlutterEngine backgroundFlutterEngine;
 
     /**
      * Sets the Dart callback handle for the Dart method that is responsible for initializing the
@@ -86,78 +84,12 @@ public class FlutterFirebaseMessagingBackgroundExecutor implements MethodCallHan
      * messages.
      */
     public boolean isNotRunning() {
-        return !isCallbackDispatcherReady.get();
+        return !isCallbackDispatcherReady.get() || engine == null;
     }
 
-    private void onInitialized() {
+    public void onInitialized() {
         isCallbackDispatcherReady.set(true);
         FlutterFirebaseMessagingBackgroundService.onInitialized();
-    }
-
-    @Override
-    public void onMethodCall(MethodCall call, @NonNull Result result) {
-        String method = call.method;
-        Context context = ContextHolder.getApplicationContext();
-        if (call.method.equals(FirebaseAuth.TAG)) {
-            new FirebaseAuth(context, call, result).Handle();
-        } else if(call.method.equals(FetchMessagesHandler.TAG)) {
-            new FetchMessagesHandler(context, call, result).Handle();
-        } else if (call.method.equals(CreateNotificationChannel.TAG)) {
-            new CreateNotificationChannel(context, call, result).Handle();
-        } else if (call.method.equals(NewMessageNotification.TAG)) {
-            new NewMessageNotification(context, call, result).Handle();
-        } else if (call.method.equals(SocketIssueWarning.TAG)) {
-            new SocketIssueWarning(context, call, result).Handle();
-        } else if (call.method.equals(ClearSocketIssue.TAG)) {
-            new ClearSocketIssue(context, call, result).Handle();
-        } else if (call.method.equals(OpenFile.TAG)) {
-            new OpenFile(context, call, result).Handle();
-        } else if (call.method.equals(OpenLink.TAG)) {
-            new OpenLink(context, call, result).Handle();
-        } else if (call.method.equals(ClearChatNotifs.TAG)) {
-            new ClearChatNotifs(context, call, result).Handle();
-        } else if (call.method.equals(GetLastLocation.TAG)) {
-            new GetLastLocation(context, call, result).Handle();
-        } else if (call.method.equals(SaveToFile.TAG)) {
-            new SaveToFile(context, call, result).Handle();
-        } else if(call.method.equals(PushShareTargets.TAG)) {
-            new PushShareTargets(context, call, result).Handle();
-        } else if (call.method.equals("get-starting-intent")) {
-            String intent = ((MainActivity) context).getIntent().getStringExtra("chatGuid");
-            ((MainActivity) context).getIntent().putExtra("chatGuid", (String) null);
-            result.success(intent);
-        } else if (call.method.equals(InitializeBackgroundHandle.TAG)) {
-            new InitializeBackgroundHandle(context, call, result).Handle();
-        } else if (call.method.equals(GetServerUrl.TAG)) {
-            new GetServerUrl(context, call, result).Handle();
-        } else if (call.method.equals(PickFile.TAG)) {
-            new PickFile(context, call, result).Handle();
-        } else if(call.method.equals(OpenCamera.TAG)) {
-            new OpenCamera(context, call, result).Handle();
-        } else if (call.method.equals(AlarmScheduler.TAG)) {
-            new AlarmScheduler(context, call, result).Handle();
-        } else if (call.method.equals(SetNextRestart.TAG)) {
-            new SetNextRestart(context, call, result).Handle();
-        } else if (call.method.equals(DownloadHandler.TAG)) {
-            new DownloadHandler(context, call, result).Handle();
-        } else if (call.method.equals(OpenContactForm.TAG)) {
-            new OpenContactForm(context, call, result).Handle();
-        } else if (call.method.equals(ViewContactForm.TAG)) {
-            new ViewContactForm(context, call, result).Handle();
-        } else if (call.method.equals(FailedToSend.TAG)) {
-            new FailedToSend(context, call, result).Handle();
-        } else if (call.method.equals(ClearFailedToSend.TAG)) {
-            new ClearFailedToSend(context, call, result).Handle();
-        } else if (method.equals("MessagingBackground#initialized")) {
-            // This message is sent by the background method channel as soon as the background isolate
-            // is running. From this point forward, the Android side of this plugin can send
-            // callback handles through the background method channel, and the Dart side will execute
-            // the Dart methods corresponding to those callback handles.
-            onInitialized();
-            result.success(true);
-        } else {
-            result.notImplemented();
-        }
     }
 
     /**
@@ -212,8 +144,15 @@ public class FlutterFirebaseMessagingBackgroundExecutor implements MethodCallHan
      * </ul>
      */
     public void startBackgroundIsolate(long callbackHandle, FlutterShellArgs shellArgs) {
-        if (backgroundFlutterEngine != null) {
+        if (engine != null) {
             Log.e(TAG, "Background isolate already started.");
+            if (backgroundChannel == null) {
+                DartExecutor executor = engine.getDartExecutor();
+                initializeMethodChannel(executor);
+            }
+            if (MethodCallHandler.isInitialized && isNotRunning()) {
+                onInitialized();
+            }
             return;
         }
 
@@ -234,12 +173,12 @@ public class FlutterFirebaseMessagingBackgroundExecutor implements MethodCallHan
                                                 TAG,
                                                 "Creating background FlutterEngine instance, with args: "
                                                         + Arrays.toString(shellArgs.toArray()));
-                                        backgroundFlutterEngine =
+                                        engine =
                                                 new FlutterEngine(
                                                         ContextHolder.getApplicationContext(), shellArgs.toArray());
                                     } else {
                                         Log.i(TAG, "Creating background FlutterEngine instance.");
-                                        backgroundFlutterEngine =
+                                        engine =
                                                 new FlutterEngine(ContextHolder.getApplicationContext());
                                     }
                                     // We need to create an instance of `FlutterEngine` before looking up the
@@ -247,7 +186,7 @@ public class FlutterFirebaseMessagingBackgroundExecutor implements MethodCallHan
                                     // lookup will fail.
                                     FlutterCallbackInformation flutterCallback =
                                             FlutterCallbackInformation.lookupCallbackInformation(callbackHandle);
-                                    DartExecutor executor = backgroundFlutterEngine.getDartExecutor();
+                                    DartExecutor executor = engine.getDartExecutor();
                                     initializeMethodChannel(executor);
                                     DartCallback dartCallback =
                                             new DartCallback(assets, appBundlePath, flutterCallback);
@@ -270,7 +209,7 @@ public class FlutterFirebaseMessagingBackgroundExecutor implements MethodCallHan
      * corresponds to a callback registered with the Dart VM.
      */
     public void executeDartCallbackInBackgroundIsolate(Intent intent, final CountDownLatch latch) {
-        if (backgroundFlutterEngine == null) {
+        if (engine == null) {
             Log.i(
                     TAG,
                     "A background message could not be handled in Dart as no onBackgroundMessage handler has been registered.");
@@ -303,8 +242,7 @@ public class FlutterFirebaseMessagingBackgroundExecutor implements MethodCallHan
         RemoteMessage remoteMessage =
                 intent.getParcelableExtra("notification");
         if (remoteMessage != null) {
-            backgroundChannel.invokeMethod(remoteMessage.getData().get("type"), remoteMessage.getData().get("data"),
-                    result);
+            backgroundChannel.invokeMethod(remoteMessage.getData().get("type"), remoteMessage.getData().get("data"), result);
         } else {
             Log.e(TAG, "RemoteMessage instance not found in Intent.");
         }
@@ -326,6 +264,6 @@ public class FlutterFirebaseMessagingBackgroundExecutor implements MethodCallHan
         // callbacks in the background isolate.
         backgroundChannel =
                 new MethodChannel(isolate, "com.bluebubbles.messaging");
-        backgroundChannel.setMethodCallHandler(this);
+        backgroundChannel.setMethodCallHandler((call, result) -> MethodCallHandler.methodCallHandler(call, result, ContextHolder.getApplicationContext(), null, this));
     }
 }

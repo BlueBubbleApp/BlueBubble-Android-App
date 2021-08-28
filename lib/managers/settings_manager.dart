@@ -65,7 +65,7 @@ class SettingsManager {
   ///
   /// @param [context] is an optional parameter to be used for setting the adaptive theme based on the settings.
   /// Setting to null will prevent the theme from being set and will be set to null in the background isolate
-  Future<void> getSavedSettings({bool headless = false, BuildContext? context}) async {
+  Future<void> getSavedSettings({BuildContext? context}) async {
     await DBProvider.setupConfigRows();
     settings = await Settings.getSettings();
 
@@ -77,11 +77,13 @@ class SettingsManager {
     }
 
     // // If [context] is null, then we can't set the theme, and we shouldn't anyway
-    await loadTheme(context);
+    if (context != null) {
+      await loadTheme(context);
+    }
 
     try {
       // Set the [displayMode] to that saved in settings
-      await FlutterDisplayMode.setPreferredMode(await settings.getDisplayMode());
+      FlutterDisplayMode.setPreferredMode(await settings.getDisplayMode());
     } catch (e) {}
 
     // Change the [finishedSetup] status to that of the settings
@@ -89,14 +91,6 @@ class SettingsManager {
       await DBProvider.deleteDB();
     }
     SocketManager().finishedSetup.sink.add(settings.finishedSetup.value);
-
-    // If we aren't running in the background, then we should auto start the socket and authorize fcm just in case we haven't
-    if (!headless) {
-      try {
-        SocketManager().startSocketIO();
-        SocketManager().authFCM();
-      } catch (e) {}
-    }
   }
 
   /// Saves a [Settings] instance to disk
@@ -106,10 +100,6 @@ class SettingsManager {
     // Set the new settings as the current settings in the manager
     settings = newSettings;
     await settings.save();
-    try {
-      // Set the [displayMode] to that saved in settings
-      await FlutterDisplayMode.setPreferredMode(await settings.getDisplayMode());
-    } catch (e) {}
   }
 
   /// Updates the selected theme for the app
@@ -124,12 +114,12 @@ class SettingsManager {
     ThemeObject? selectedLightTheme,
     ThemeObject? selectedDarkTheme,
   }) async {
-    await selectedLightTheme?.save();
-    await selectedDarkTheme?.save();
-    await ThemeObject.setSelectedTheme(light: selectedLightTheme?.id ?? null, dark: selectedDarkTheme?.id ?? null);
+    selectedLightTheme?.save();
+    selectedDarkTheme?.save();
+    ThemeObject.setSelectedTheme(light: selectedLightTheme?.id ?? null, dark: selectedDarkTheme?.id ?? null);
 
-    ThemeData lightTheme = (await ThemeObject.getLightTheme()).themeData;
-    ThemeData darkTheme = (await ThemeObject.getDarkTheme()).themeData;
+    ThemeData lightTheme = (selectedLightTheme ?? (await ThemeObject.getLightTheme())).themeData;
+    ThemeData darkTheme = (selectedDarkTheme ?? (await ThemeObject.getDarkTheme())).themeData;
     AdaptiveTheme.of(context).setTheme(
       light: lightTheme,
       dark: darkTheme,

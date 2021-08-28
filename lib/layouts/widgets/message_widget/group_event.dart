@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:bluebubbles/helpers/utils.dart';
 import 'package:bluebubbles/repository/models/message.dart';
 import 'package:flutter/material.dart';
@@ -11,44 +9,12 @@ enum ItemTypes {
   participantLeft,
 }
 
-class GroupEvent extends StatefulWidget {
-  GroupEvent({
+class GroupEvent extends StatelessWidget {
+  const GroupEvent({
     Key? key,
     required this.message,
   }) : super(key: key);
   final Message? message;
-
-  @override
-  _GroupEventState createState() => _GroupEventState();
-}
-
-class _GroupEventState extends State<GroupEvent> {
-  String text = "";
-  Completer<void>? completer;
-
-  @override
-  initState() {
-    super.initState();
-    getEventText();
-  }
-
-  Future<void> getEventText() async {
-    if (completer != null) return completer!.future;
-    completer = new Completer();
-
-    try {
-      String text = await getGroupEventText(widget.message!);
-      if (this.text != text && this.mounted) {
-        setState(() {
-          this.text = text;
-        });
-      }
-
-      completer!.complete();
-    } catch (ex) {
-      completer!.completeError(ex);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -129,12 +95,15 @@ class _GroupEventState extends State<GroupEvent> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  text,
-                  style: Theme.of(context).textTheme.subtitle2,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 2,
-                  textAlign: TextAlign.center,
+                FutureBuilder<String>(
+                future: getGroupEventText(message!),
+                  builder: (context, snapshot) => Text(
+                    snapshot.data ?? "",
+                    style: Theme.of(context).textTheme.subtitle2,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                  ),
                 ),
                 ...extras
               ],

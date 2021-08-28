@@ -2,6 +2,7 @@ import 'package:bluebubbles/helpers/attachment_helper.dart';
 import 'package:bluebubbles/helpers/constants.dart';
 import 'package:bluebubbles/managers/settings_manager.dart';
 import 'package:bluebubbles/repository/models/attachment.dart';
+import 'package:bluebubbles/repository/models/message.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -67,4 +68,28 @@ Widget buildImagePlaceholder(BuildContext context, Attachment attachment, Widget
       child: AspectRatio(
           aspectRatio: ratio,
           child: Container(width: width, height: height, color: Theme.of(context).accentColor, child: child)));
+}
+
+Widget addReactionsToWidget(
+    {required Widget messageWidget, required Widget reactions, required Message? message, bool shouldShow = true}) {
+  if (!shouldShow) return messageWidget;
+
+  return Stack(
+    alignment: message!.isFromMe! ? AlignmentDirectional.topStart : AlignmentDirectional.topEnd,
+    children: [
+      messageWidget,
+      reactions,
+    ],
+  );
+}
+
+/// Adds reacts to a [message] widget
+Widget addStickersToWidget({required Widget message, required Widget stickers, required bool isFromMe}) {
+  return Stack(
+    alignment: (isFromMe) ? AlignmentDirectional.bottomEnd : AlignmentDirectional.bottomStart,
+    children: [
+      message,
+      stickers,
+    ],
+  );
 }

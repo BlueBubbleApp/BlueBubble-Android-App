@@ -6,17 +6,15 @@ import 'package:bluebubbles/managers/method_channel_interface.dart';
 import 'package:bluebubbles/managers/notification_manager.dart';
 import 'package:bluebubbles/managers/settings_manager.dart';
 import 'package:bluebubbles/socket_manager.dart';
+import 'package:get/get.dart';
 
 /// [LifeCycleManager] is responsible for keeping track of when the app is open and when it is closed
 ///
-/// It helps with managing the [SocketManager] socket by closing it and opening it when the app is closed nd when it isn't
+/// It helps with managing the [SocketManager] socket by closing it and opening it when the app is closed and when it isn't
 /// This class is a singleton
-class LifeCycleManager {
-  factory LifeCycleManager() {
-    return _manager;
-  }
+class LifeCycleManager extends GetxService {
 
-  static final LifeCycleManager _manager = LifeCycleManager._internal();
+  static LifeCycleManager get instance => Get.find<LifeCycleManager>();
 
   /// Private variable for whether the app is closed or open
   bool _isAlive = false;
@@ -26,18 +24,25 @@ class LifeCycleManager {
   StreamController<bool> _stream = new StreamController.broadcast();
   Stream<bool> get stream => _stream.stream;
 
-  LifeCycleManager._internal() {
-    // Listen to the socket processes that are updated
+  @override
+  void onInit() {
     SocketManager().socketProcessUpdater.listen((event) {
       // If there are no more socket processes, then we can safely close the socket
       if (event.isEmpty && !_isAlive) {
         SocketManager().closeSocket();
       }
     });
+    super.onInit();
+  }
+
+  @override
+  void onClose() {
+    _stream.close();
+    super.onClose();
   }
 
   /// Public method called from [Home] when the app is opened or resumed
-  opened() {
+  void opened() {
     // If the app is not alive (was previously closed) and the curent chat is not null (a chat is already open)
     // Then mark the current chat as read.
     if (!_isAlive && CurrentChat.activeChat != null) {
@@ -55,7 +60,7 @@ class LifeCycleManager {
   }
 
   /// Public method called from [Home] when the app is closed or paused
-  close() {
+  void close() {
     if (SettingsManager().settings.finishedSetup.value) {
       // Close the socket and set the isAlive to false
       //
@@ -71,15 +76,11 @@ class LifeCycleManager {
   }
 
   /// Helper method to update the alive status and send the new status to the stream
-  updateStatus(bool newStatus) {
+  void updateStatus(bool newStatus) {
     // We don't want to send things to the stream unless they are new
     if (_isAlive != newStatus) {
       _isAlive = newStatus;
       _stream.sink.add(_isAlive);
     }
-  }
-
-  dispose() {
-    _stream.close();
   }
 }

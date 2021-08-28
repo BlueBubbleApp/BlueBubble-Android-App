@@ -1,8 +1,11 @@
-import 'package:bluebubbles/layouts/stateful_wrapper.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:battery_optimization/battery_optimization.dart';
+import 'package:get/get.dart';
+
+// Dummy controller so we can use [GetBuilder]
+class BatteryOptimizationController extends GetxController {}
 
 class BatteryOptimizationPage extends StatelessWidget {
   const BatteryOptimizationPage({Key? key, required this.controller}) : super(key: key);
@@ -10,8 +13,8 @@ class BatteryOptimizationPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StatefulWrapper(
-        onInit: () {
+    return GetBuilder<BatteryOptimizationController>(
+        initState: (_) {
           // If battery optimizations are already disabled, go to the next page
           BatteryOptimization.isIgnoringBatteryOptimizations().then((isDisabled) {
             if (isDisabled!) {
@@ -22,7 +25,9 @@ class BatteryOptimizationPage extends StatelessWidget {
             }
           });
         },
-        child: AnnotatedRegion<SystemUiOverlayStyle>(
+        init: BatteryOptimizationController(),
+        global: false,
+        builder: (_) => AnnotatedRegion<SystemUiOverlayStyle>(
           value: SystemUiOverlayStyle(
             systemNavigationBarColor: Theme.of(context).backgroundColor, // navigation bar color
             systemNavigationBarIconBrightness: Theme.of(context).backgroundColor.computeLuminance() > 0.5 ? Brightness.dark : Brightness.light,

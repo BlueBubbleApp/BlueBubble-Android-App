@@ -30,15 +30,11 @@ class _TypingIndicatorState extends State<TypingIndicator> with TickerProviderSt
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: Duration(milliseconds: 700));
-    _controller.addListener(() {});
 
     animation = Tween(
       begin: 0.0,
       end: Math.pi,
-    ).animate(_controller)
-      ..addListener(() {
-        setState(() {});
-      });
+    ).animate(_controller);
 
     _controller.addStatusListener((state) {
       if (state == AnimationStatus.completed && this.mounted) {
@@ -97,7 +93,7 @@ class _TypingIndicatorState extends State<TypingIndicator> with TickerProviderSt
                         bottom: skin.value == Skins.iOS ? 13 : 5,
                       ),
                       constraints: BoxConstraints(
-                        maxWidth: context.width * MessageWidgetMixin.MAX_SIZE,
+                        maxWidth: context.width * MessageWidgetHelper.MAX_SIZE,
                       ),
                       padding: EdgeInsets.symmetric(
                         vertical: 8,

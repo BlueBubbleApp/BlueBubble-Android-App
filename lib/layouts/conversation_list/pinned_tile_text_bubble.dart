@@ -8,10 +8,9 @@ import 'package:bluebubbles/repository/models/chat.dart';
 import 'package:bluebubbles/repository/models/message.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
-class PinnedTileTextBubble extends StatefulWidget {
+class PinnedTileTextBubble extends StatelessWidget {
   PinnedTileTextBubble({
     Key? key,
     required this.chat,
@@ -20,38 +19,13 @@ class PinnedTileTextBubble extends StatefulWidget {
   final Chat chat;
 
   @override
-  _PinnedTileTextBubbleState createState() => _PinnedTileTextBubbleState();
-}
-
-class _PinnedTileTextBubbleState extends State<PinnedTileTextBubble> with AutomaticKeepAliveClientMixin {
-  Brightness? brightness;
-  Color? previousBackgroundColor;
-  bool gotBrightness = false;
-
-  void loadBrightness() {
-    Color now = context.theme.backgroundColor;
-    bool themeChanged = previousBackgroundColor == null || previousBackgroundColor != now;
-    if (!themeChanged && gotBrightness) return;
-
-    previousBackgroundColor = now;
-
-    bool isDark = now.computeLuminance() < 0.179;
-    brightness = isDark ? Brightness.dark : Brightness.light;
-    gotBrightness = true;
-    if (this.mounted) setState(() {});
-  }
-
-  @override
   Widget build(BuildContext context) {
-    super.build(context);
-
-    bool showTail = !widget.chat.isGroup();
-
+    bool showTail = !chat.isGroup();
     return FutureBuilder<Message>(
-      future: widget.chat.latestMessage,
+      future: chat.latestMessage,
       builder: (BuildContext context, AsyncSnapshot snapshot) {
         if (!snapshot.hasData) return Container();
-        if (!(widget.chat.hasUnreadMessage ?? false)) return Container();
+        if (!(chat.hasUnreadMessage ?? false)) return Container();
         Message message = snapshot.data;
         bool leftSide = Random(message.id).nextBool();
         bool hide =
@@ -60,7 +34,7 @@ class _PinnedTileTextBubbleState extends State<PinnedTileTextBubble> with Automa
             SettingsManager().settings.generateFakeMessageContent.value;
 
         String messageText = MessageHelper.getNotificationTextSync(message);
-        if (generate) messageText = widget.chat.fakeLatestMessageText ?? "";
+        if (generate) messageText = chat.fakeLatestMessageText ?? "";
         if (message.associatedMessageGuid != null ||
             message.isFromMe! ||
             isNullOrEmpty(messageText, trimString: true)!) {
@@ -140,9 +114,6 @@ class _PinnedTileTextBubbleState extends State<PinnedTileTextBubble> with Automa
       },
     );
   }
-
-  @override
-  bool get wantKeepAlive => true;
 }
 
 class TailPainter extends CustomPainter {

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:bluebubbles/action_handler.dart';
 import 'package:bluebubbles/blocs/chat_bloc.dart';
+import 'package:bluebubbles/helpers/logger.dart';
 import 'package:bluebubbles/helpers/message_helper.dart';
 import 'package:bluebubbles/helpers/metadata_helper.dart';
 import 'package:bluebubbles/managers/contact_manager.dart';
@@ -296,7 +297,7 @@ class Chat {
   Future<Chat> toggleHasUnread(bool hasUnread) async {
     final Database db = await DBProvider.db.database;
     if (hasUnread) {
-      if (CurrentChat.isActive(this.guid!)) {
+      if (CurrentChat.forGuid(this.guid!)?.isAlive ?? false) {
         return this;
       }
     }
@@ -312,9 +313,9 @@ class Chat {
     }
 
     if (hasUnread) {
-      EventDispatcher().emit("add-unread-chat", {"chatGuid": this.guid});
+      EventDispatcher.instance.emit("add-unread-chat", {"chatGuid": this.guid});
     } else {
-      EventDispatcher().emit("remove-unread-chat", {"chatGuid": this.guid});
+      EventDispatcher.instance.emit("remove-unread-chat", {"chatGuid": this.guid});
     }
 
     ChatBloc().updateUnreads();
@@ -327,7 +328,7 @@ class Chat {
     // Save the message
     Message? existing = await Message.findOne({"guid": message.guid});
     Message? newMessage;
-
+    Logger.instance.log("Saving message with guid ${message.guid}");
     try {
       newMessage = await message.save();
     } catch (ex, stacktrace) {
@@ -357,16 +358,19 @@ class Chat {
 
     // Save any attachments
     for (Attachment? attachment in message.attachments ?? []) {
+      Logger.instance.log("Saving message attachments");
       await attachment!.save(newMessage);
     }
 
     // Save the chat.
     // This will update the latestMessage info as well as update some
     // other fields that we want to "mimic" from the server
+    Logger.instance.log("Saving chat");
     await this.save();
 
     try {
       // Add the relationship
+      Logger.instance.log("Saving message in chat_message_join DB");
       await db.insert("chat_message_join", {"chatId": this.id, "messageId": message.id});
     } catch (ex) {
       // Don't do anything if it already exists
@@ -378,7 +382,7 @@ class Chat {
       // If the message is not from the same chat as the current chat, mark unread
       if (message.isFromMe!) {
         await this.toggleHasUnread(false);
-      } else if (!CurrentChat.isActive(this.guid!)) {
+      } else if (!(CurrentChat.forGuid(this.guid!)?.isAlive ?? false)) {
         await this.toggleHasUnread(true);
       }
     }

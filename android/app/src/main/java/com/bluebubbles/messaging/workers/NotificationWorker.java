@@ -117,7 +117,7 @@ public class NotificationWorker extends Worker implements DartWorker {
             executor.executeDartCallback(dartCallback);
 
             backgroundChannel = new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), CHANNEL);
-            backgroundChannel.setMethodCallHandler((call, result) -> MethodCallHandler.methodCallHandler(call, result, context, this));
+            backgroundChannel.setMethodCallHandler((call, result) -> MethodCallHandler.methodCallHandler(call, result, context, this, null));
         }
     }
 

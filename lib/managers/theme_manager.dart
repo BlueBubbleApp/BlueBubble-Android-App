@@ -12,19 +12,15 @@ class ThemeManager {
 
   ThemeManager._internal();
 
+  /// Get the iOS style or Material style scroll physics
   ScrollPhysics get scrollPhysics {
-    if (SettingsManager().settings.skin.value == Skins.Material || SettingsManager().settings.skin.value == Skins.Samsung) {
-      return AlwaysScrollableScrollPhysics(
-        parent: ClampingScrollPhysics(),
-      );
-    } else if (SettingsManager().settings.skin.value == Skins.iOS) {
+    if (SettingsManager().settings.skin.value == Skins.iOS) {
       return AlwaysScrollableScrollPhysics(
         parent: CustomBouncingScrollPhysics(),
       );
-    } else {
-      return AlwaysScrollableScrollPhysics(
-        parent: ClampingScrollPhysics(),
-      );
     }
+    return AlwaysScrollableScrollPhysics(
+        parent: ClampingScrollPhysics(),
+    );
   }
 }

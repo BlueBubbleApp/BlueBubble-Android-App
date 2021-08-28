@@ -1,6 +1,5 @@
 import 'package:bluebubbles/helpers/hex_color.dart';
 import 'package:bluebubbles/helpers/utils.dart';
-import 'package:bluebubbles/managers/contact_manager.dart';
 import 'package:bluebubbles/managers/method_channel_interface.dart';
 import 'package:bluebubbles/managers/settings_manager.dart';
 import 'package:bluebubbles/repository/models/message.dart';
@@ -8,51 +7,8 @@ import 'package:faker/faker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-// Mixin just for commonly shared functions and properties between the SentMessage and ReceivedMessage
-abstract class MessageWidgetMixin {
-  String contactTitle = "";
-  bool hasHyperlinks = false;
+class MessageWidgetHelper {
   static const double MAX_SIZE = 3 / 5;
-
-  Future<void> initMessageState(Message message, bool? showHandle) async {
-    this.hasHyperlinks = parseLinks(message.text!).isNotEmpty;
-    await getContactTitle(message, showHandle);
-  }
-
-  Future<void> getContactTitle(Message message, bool? showHandle) async {
-    if (message.handle == null || !showHandle!) return;
-
-    String? title = await ContactManager().getContactTitle(message.handle);
-
-    if (title != contactTitle) {
-      contactTitle = title ?? "";
-    }
-  }
-
-  /// Adds reacts to a [message] widget
-  Widget addReactionsToWidget(
-      {required Widget messageWidget, required Widget reactions, required Message? message, bool shouldShow = true}) {
-    if (!shouldShow) return messageWidget;
-
-    return Stack(
-      alignment: message!.isFromMe! ? AlignmentDirectional.topStart : AlignmentDirectional.topEnd,
-      children: [
-        messageWidget,
-        reactions,
-      ],
-    );
-  }
-
-  /// Adds reacts to a [message] widget
-  Widget addStickersToWidget({required Widget message, required Widget stickers, required bool isFromMe}) {
-    return Stack(
-      alignment: (isFromMe) ? AlignmentDirectional.bottomEnd : AlignmentDirectional.bottomStart,
-      children: [
-        message,
-        stickers,
-      ],
-    );
-  }
 
   static List<InlineSpan> buildMessageSpans(BuildContext context, Message? message, {List<Color>? colors: const []}) {
     List<InlineSpan> textSpans = <InlineSpan>[];

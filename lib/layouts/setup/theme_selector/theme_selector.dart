@@ -42,7 +42,7 @@ class ThemeSelectorController extends GetxController {
   }
 
   void setMessagesView() {
-    messagesView = MessagesView(
+    /*messagesView = MessagesView(
       messageBloc: MessageBloc(
         Chat(
             id: 69,
@@ -164,7 +164,7 @@ class ThemeSelectorController extends GetxController {
           ),
         ),
       ],
-    );
+    );*/
   }
 }
 

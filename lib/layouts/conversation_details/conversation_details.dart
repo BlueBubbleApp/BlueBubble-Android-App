@@ -454,7 +454,7 @@ class _ConversationDetailsState extends State<ConversationDetails> {
                         inactiveThumbColor: Theme.of(context).accentColor,
                         onChanged: (value) async {
                           await widget.chat.togglePin(!widget.chat.isPinned!);
-                          EventDispatcher().emit("refresh", null);
+                          EventDispatcher.instance.emit("refresh", null);
                           if (this.mounted) setState(() {});
                         }))),
             SliverToBoxAdapter(
@@ -471,7 +471,7 @@ class _ConversationDetailsState extends State<ConversationDetails> {
                         inactiveThumbColor: Theme.of(context).accentColor,
                         onChanged: (value) async {
                           await widget.chat.toggleMute(value);
-                          EventDispatcher().emit("refresh", null);
+                          EventDispatcher.instance.emit("refresh", null);
 
                           if (this.mounted) setState(() {});
                         }))),
@@ -494,7 +494,7 @@ class _ConversationDetailsState extends State<ConversationDetails> {
                             ChatBloc().unArchiveChat(widget.chat);
                           }
 
-                          EventDispatcher().emit("refresh", null);
+                          EventDispatcher.instance.emit("refresh", null);
                           if (this.mounted) setState(() {});
                         }))),
             SliverToBoxAdapter(
@@ -507,7 +507,7 @@ class _ConversationDetailsState extends State<ConversationDetails> {
 
                   try {
                     await widget.chat.clearTranscript();
-                    EventDispatcher().emit("refresh-messagebloc", {"chatGuid": widget.chat.guid});
+                    EventDispatcher.instance.emit("refresh-messagebloc", {"chatGuid": widget.chat.guid});
                     if (this.mounted)
                       setState(() {
                         isClearing = false;
