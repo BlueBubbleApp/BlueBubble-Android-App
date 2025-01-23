@@ -1051,7 +1051,7 @@ packages:
       sha256: "2c5611c0b44e20d180e4342318e1bbc28b0a44ad2c442f5df16962606fd3e8e3"
       url: "https://pub.dev"
     source: hosted
-    version: "3.1.1"
+    version: "3.1.2"
   flutter_staggered_grid_view:
     dependency: "direct main"
     description:
