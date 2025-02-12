@@ -2,6 +2,7 @@ import 'package:bluebubbles/database/models.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
 import 'package:bluebubbles/services/services.dart';
 import 'package:dio/dio.dart';
+import 'package:native_dio_adapter/native_dio_adapter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart' hide Response, FormData, MultipartFile;
@@ -78,6 +79,9 @@ class HttpService extends GetxService {
       sendTimeout: Duration(milliseconds: ss.settings.apiTimeout.value),
       headers: headers,
     ));
+    // Native Adapter will use the native http implementation on macOS, iOS and Android. 
+    // Other platforms still use the Dart http stack.
+    dio.httpClientAdapter = NativeAdapter();
     dio.interceptors.add(ApiInterceptor());
     // Uncomment to run tests on most API requests
     // testAPI();

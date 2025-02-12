@@ -194,6 +194,7 @@ dependencies:
   pull_down_button: ^0.10.1
   app_install_date: ^0.1.5
   dice_bear: ^0.1.7
+  native_dio_adapter: ^1.4.0
 
 dependency_overrides:
   # overrides for packages stuck on outdated versions
