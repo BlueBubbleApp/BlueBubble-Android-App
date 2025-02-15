@@ -160,4 +160,11 @@ class Handle {
 
     return output;
   }
+
+  // Sometimes, the 'fakeName' handles are different on two handles that should be the same. (Even when redacted mode is off)
+  // This method does a simple check on the Handle ids.
+  bool isEqual(Handle? otherHandle) {
+    if (otherHandle == null) return false;
+    return id == otherHandle.id;
+  }
 }
