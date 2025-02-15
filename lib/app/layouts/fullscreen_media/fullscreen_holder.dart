@@ -1,4 +1,6 @@
+import 'package:bluebubbles/app/components/avatars/contact_avatar_widget.dart';
 import 'package:bluebubbles/app/components/circle_progress_bar.dart';
+import 'package:bluebubbles/app/layouts/conversation_view/pages/conversation_view.dart';
 import 'package:bluebubbles/app/wrappers/stateful_boilerplate.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
@@ -91,7 +93,7 @@ class FullscreenMediaHolderState extends OptimizedState<FullscreenMediaHolder> {
           child: Scaffold(
             appBar: !iOS || !showAppBar
                 // AppBar placeholder to prevent shifting of content when toggling the app bar
-                ? PreferredSize(preferredSize: const Size.fromHeight(56), child: Container())
+                ? PreferredSize(preferredSize: const Size.fromHeight(88), child: Container())
                 : AppBar(
                     leading: XGestureDetector(
                       supportTouch: true,
@@ -120,6 +122,57 @@ class FullscreenMediaHolderState extends OptimizedState<FullscreenMediaHolder> {
                     centerTitle: iOS,
                     iconTheme: IconThemeData(color: context.theme.colorScheme.primary),
                     backgroundColor: context.theme.colorScheme.properSurface,
+                    bottom: PreferredSize(
+                      preferredSize: const Size.fromHeight(32),
+                      child: Column(
+                          children : [
+                            RawChip(
+                              tapEnabled: true,
+                              side: BorderSide(color: context.theme.colorScheme.outline.withOpacity(0.1)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              avatar: (attachment.message.target?.isFromMe == true) ?
+                                ContactAvatarWidget(contact: Contact(id : 'you', displayName : ss.settings.userName.value, emails : [ss.settings.iCloudAccount.value])) :
+                                ContactAvatarWidget(handle: attachment.message.target?.handle ?? attachment.message.target?.getHandle()),
+                              label: Wrap(
+                                spacing : 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text('From ${attachment.message.target?.isFromMe == true ? 'You' : attachment.message.target?.handle?.displayName}',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.normal,
+                                          color: context.theme.colorScheme.onSurface
+                                      )
+                                  ),
+                                  Icon(
+                                    iOS ? CupertinoIcons.chevron_right : Icons.chevron_right,
+                                    color: context.theme.colorScheme.onSurface.withOpacity(0.6),
+                                    size: 14,
+                                  ),
+                                ],
+                              ),
+                              onSelected: (selected) {
+                                if (attachment.message.target?.chat.target != null) {
+                                  final attachmentChat = attachment.message.target!.chat.target!;
+                                  final service = ms(attachmentChat.guid);
+                                  service.method = "network";
+                                  service.struct.addMessages([attachment.message.target!]);
+                                  ns.pushAndRemoveUntil(
+                                    context,
+                                    ConversationView(
+                                      chat: attachmentChat,
+                                      customService: service,
+                                    ),
+                                    (route) => route.isFirst,
+                                  );
+                                } else {
+                                  // Gracefully show a "Failed to jump to message" pill notification
+                                }
+                              },
+                            )
+                          ]
+                      )
+                    ),
                     systemOverlayStyle: context.theme.colorScheme.brightness == Brightness.dark
                         ? SystemUiOverlayStyle.light
                         : SystemUiOverlayStyle.dark,
