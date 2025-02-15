@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:bluebubbles/app/layouts/conversation_attachments/conversation_attachments.dart';
 import 'package:bluebubbles/app/layouts/conversation_details/dialogs/add_participant.dart';
 import 'package:bluebubbles/app/layouts/conversation_details/widgets/chat_info.dart';
 import 'package:bluebubbles/app/layouts/conversation_details/widgets/chat_options.dart';
+import 'package:bluebubbles/app/layouts/conversation_details/widgets/attachments_title.dart';
 import 'package:bluebubbles/app/layouts/conversation_view/widgets/message/interactive/url_preview.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/app/layouts/conversation_details/widgets/media_gallery_card.dart';
@@ -22,6 +24,9 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+/* Max number of previews to show for each attachment type on the conversation_details page */
+const maxAttachmentPreviews = 6;
 
 class ConversationDetails extends StatefulWidget {
   final Chat chat;
@@ -100,11 +105,11 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
     chat.getAttachmentsAsync().then((value) {
       final _media = value.where((e) => !(e.message.target?.isGroupEvent ?? true)
           && !(e.message.target?.isInteractive ?? true)
-          && (e.mimeStart == "image" || e.mimeStart == "video")).take(24);
+          && (e.mimeStart == "image" || e.mimeStart == "video"));
       final _docs = value.where((e) => !(e.message.target?.isGroupEvent ?? true)
           && !(e.message.target?.isInteractive ?? true)
-          && e.mimeStart != "image" && e.mimeStart != "video" && !(e.mimeType ?? "").contains("location")).take(24);
-      final _locations = value.where((e) => (e.mimeType ?? "").contains("location")).take(10);
+          && e.mimeStart != "image" && e.mimeStart != "video" && !(e.mimeType ?? "").contains("location"));
+      final _locations = value.where((e) => (e.mimeType ?? "").contains("location"));
       for (Attachment a in _media) {
         a.message.target?.handle = chat.participants.firstWhereOrNull((e) => e.originalROWID == a.message.target?.handleId);
       }
@@ -340,14 +345,19 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
             ChatOptions(chat: chat),
             if (!kIsWeb && media.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.only(top: 20, bottom: 10, left: 15),
+                padding: const EdgeInsets.only(top: 20, bottom: 0, left: 15),
                 sliver: SliverToBoxAdapter(
-                  child: Text("IMAGES & VIDEOS", style: context.theme.textTheme.bodyMedium!.copyWith(color: context.theme.colorScheme.outline)),
+                  child: AttachmentsTitle(
+                    title: "PHOTOS & VIDEOS",
+                    attachmentsType: AttachmentTypes.media,
+                    attachments: media,
+                    chat: chat,
+                  ),
                 ),
               ),
             if (!kIsWeb && media.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.only(top: 0, bottom: 10, left: 10, right: 10),
                 sliver: SliverGrid(
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: max(2, ns.width(context) ~/ 200),
@@ -407,20 +417,25 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
                         ),
                       ));
                     },
-                    childCount: media.length,
+                    childCount: min(maxAttachmentPreviews, media.length),
                   ),
                 ),
               ),
             if (!kIsWeb && links.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.only(top: 20, bottom: 10, left: 15),
+                padding: const EdgeInsets.only(top: 20, bottom: 0, left: 15),
                 sliver: SliverToBoxAdapter(
-                  child: Text("LINKS", style: context.theme.textTheme.bodyMedium!.copyWith(color: context.theme.colorScheme.outline)),
+                  child: AttachmentsTitle(
+                    title: "LINKS",
+                    attachmentsType: AttachmentTypes.links,
+                    links : links,
+                    chat: chat,
+                  ),
                 ),
               ),
             if (!kIsWeb && links.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.only(top: 0, bottom: 10, left: 10, right: 10),
                 sliver: SliverToBoxAdapter(
                   child: MasonryGridView.count(
                     crossAxisCount: max(2, ns.width(context) ~/ 200),
@@ -455,20 +470,26 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
                         ),
                       );
                     },
-                    itemCount: links.length,
+                    itemCount: min(maxAttachmentPreviews, links.length),
                   ),
                 ),
               ),
             if (!kIsWeb && locations.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.only(top: 20, bottom: 10, left: 15),
+                padding: const EdgeInsets.only(top: 20, bottom: 0, left: 15),
                 sliver: SliverToBoxAdapter(
-                  child: Text("LOCATIONS", style: context.theme.textTheme.bodyMedium!.copyWith(color: context.theme.colorScheme.outline)),
+                  child: AttachmentsTitle(
+                    title: "LOCATIONS",
+                    attachmentsType: AttachmentTypes.locations,
+                    attachments: locations,
+                    links : links,
+                    chat: chat,
+                  ),
                 ),
               ),
             if (!kIsWeb && locations.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.only(top: 0, bottom: 10, left: 10, right: 10),
                 sliver: SliverToBoxAdapter(
                   child: MasonryGridView.count(
                     crossAxisCount: max(2, ns.width(context) ~/ 200),
@@ -507,20 +528,25 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
                         ),
                       );
                     },
-                    itemCount: locations.length,
+                    itemCount: min(maxAttachmentPreviews, locations.length),
                   ),
                 ),
               ),
             if (!kIsWeb && docs.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.only(top: 20, bottom: 10, left: 15),
+                padding: const EdgeInsets.only(top: 20, bottom: 0, left: 15),
                 sliver: SliverToBoxAdapter(
-                  child: Text("OTHER FILES", style: context.theme.textTheme.bodyMedium!.copyWith(color: context.theme.colorScheme.outline)),
+                  child: AttachmentsTitle(
+                    title: "OTHER FILES",
+                    attachmentsType: AttachmentTypes.documents,
+                    attachments: docs,
+                    chat: chat,
+                  ),
                 ),
               ),
             if (!kIsWeb && docs.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.only(top: 0, bottom: 10, left: 10, right: 10),
                 sliver: SliverGrid(
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: max(2, ns.width(context) ~/ 200),
@@ -534,7 +560,7 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
                         attachment: docs[index],
                       );
                     },
-                    childCount: docs.length,
+                    childCount: min(maxAttachmentPreviews, docs.length),
                   ),
                 ),
               ),
