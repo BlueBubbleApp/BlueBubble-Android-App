@@ -26,7 +26,7 @@ dependencies:
   animations: ^2.0.11
   app_links: ^6.1.1
   async_task: ^1.1.1
-  audio_waveforms: ^1.0.5
+  audio_waveforms: ^1.2.0
   auto_size_text: ^3.0.0
   bitsdojo_window: ^0.1.6
   chunked_stream: ^1.4.2
@@ -80,7 +80,7 @@ dependencies:
   flutter_map: ^7.0.1
   flutter_map_marker_popup: ^7.0.0
   flutter_markdown: ^0.7.2+1
-  flutter_slidable: ^3.1.0
+  flutter_slidable: ^3.1.2
   flutter_staggered_grid_view: ^0.7.0
   flutter_svg: ^2.0.10+1
   flutter_timezone: ^3.0.1 # no desktop support
@@ -93,8 +93,8 @@ dependencies:
   giphy_get: ^3.5.4
   github: ^9.24.0
   google_fonts: ^6.2.1
-  google_ml_kit: ^0.18.0 # mobile only
-  google_mlkit_smart_reply: ^0.11.0
+  google_ml_kit: ^0.19.0 # mobile only
+  google_mlkit_smart_reply: ^0.12.0
   google_sign_in: ^6.2.1
   hand_signature: ^3.0.2
   idb_shim: ^2.4.1+1
