@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 /// When adding a new [DetailsMenuAction], make sure to add corresponding entries to
 /// the [_actionPlatformSupport], [_actionToIcon], and [_actionToText] Maps
 enum DetailsMenuAction {
+  SelectMultiple,
   Reply,
   Save,
   OpenInBrowser,
@@ -28,11 +29,10 @@ enum DetailsMenuAction {
   Forward,
   StartConversation,
   CopySelection,
+  JumpToMessage,
   Delete,
   Bookmark,
-  SelectMultiple,
-  MessageInfo,
-  JumpToMessage
+  MessageInfo
 }
 
 class PlatformSupport {
@@ -45,6 +45,7 @@ class PlatformSupport {
 }
 
 const Map<DetailsMenuAction, PlatformSupport> _actionPlatformSupport = {
+  DetailsMenuAction.SelectMultiple: PlatformSupport(true, true, true, true),
   DetailsMenuAction.Reply: PlatformSupport(true, true, true, true),
   DetailsMenuAction.Save: PlatformSupport(true, true, true, true),
   DetailsMenuAction.OpenInBrowser: PlatformSupport(true, false, false, false),
@@ -65,12 +66,12 @@ const Map<DetailsMenuAction, PlatformSupport> _actionPlatformSupport = {
   DetailsMenuAction.CopySelection: PlatformSupport(false, true, true, true),
   DetailsMenuAction.Delete: PlatformSupport(true, true, true, true),
   DetailsMenuAction.Bookmark: PlatformSupport(true, true, true, true),
-  DetailsMenuAction.SelectMultiple: PlatformSupport(true, true, true, true),
   DetailsMenuAction.MessageInfo: PlatformSupport(true, true, true, true),
   DetailsMenuAction.JumpToMessage: PlatformSupport(true, true, true, true),
 };
 
 const Map<DetailsMenuAction, (IconData, IconData)> _actionToIcon = {
+  DetailsMenuAction.SelectMultiple: (CupertinoIcons.checkmark_square, Icons.check_box_outlined),
   DetailsMenuAction.Reply: (CupertinoIcons.reply, Icons.reply),
   DetailsMenuAction.Save: (CupertinoIcons.cloud_download, Icons.file_download),
   DetailsMenuAction.OpenInBrowser: (CupertinoIcons.macwindow, Icons.open_in_browser),
@@ -91,12 +92,12 @@ const Map<DetailsMenuAction, (IconData, IconData)> _actionToIcon = {
   DetailsMenuAction.CopySelection: (CupertinoIcons.text_cursor, Icons.content_copy),
   DetailsMenuAction.Delete: (CupertinoIcons.trash, Icons.delete_outlined),
   DetailsMenuAction.Bookmark: (CupertinoIcons.bookmark, Icons.bookmark_outlined),
-  DetailsMenuAction.SelectMultiple: (CupertinoIcons.checkmark_square, Icons.check_box_outlined),
   DetailsMenuAction.MessageInfo: (CupertinoIcons.info, Icons.info),
-  DetailsMenuAction.JumpToMessage: (CupertinoIcons.chat_bubble, Icons.chat_bubble),
+  DetailsMenuAction.JumpToMessage: (CupertinoIcons.chat_bubble_text, Icons.message),
 };
 
 const Map<DetailsMenuAction, String> _actionToText = {
+  DetailsMenuAction.SelectMultiple: "Select Multiple",
   DetailsMenuAction.Reply: "Reply",
   DetailsMenuAction.Save: "Save",
   DetailsMenuAction.OpenInBrowser: "Open In Browser",
@@ -117,7 +118,6 @@ const Map<DetailsMenuAction, String> _actionToText = {
   DetailsMenuAction.CopySelection: "Copy Selection",
   DetailsMenuAction.Delete: "Delete",
   DetailsMenuAction.Bookmark: "Add/Remove Bookmark",
-  DetailsMenuAction.SelectMultiple: "Select Multiple",
   DetailsMenuAction.MessageInfo: "Message Info",
   DetailsMenuAction.JumpToMessage: "Jump To Message",
 };
