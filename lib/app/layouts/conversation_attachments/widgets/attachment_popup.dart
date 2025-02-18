@@ -72,7 +72,7 @@ class _AttachmentPopupState extends OptimizedState<AttachmentPopup> with SingleT
         View.of(context).viewInsets,
         View.of(context).devicePixelRatio,
       ).bottom;
-  late int numberToShow = 4;
+  late int numberToShow = 3;
 
   MessagesService get service => ms(chat.guid);
 
@@ -132,10 +132,10 @@ class _AttachmentPopupState extends OptimizedState<AttachmentPopup> with SingleT
     if (iOS) {
       contextMenuAlign = _getContextMenuAlignment();
       final remainingHeight = max(Get.height - Get.statusBarHeight - 135 - widget.size.height, itemHeight);
-      numberToShow = min(remainingHeight ~/ itemHeight, 4);
+      numberToShow = min(remainingHeight ~/ itemHeight, 3);
     } else {
       // Potentially make this dynamic in the future
-      numberToShow = (widget.returnMaterialActionWidgetsOnly == true) ? 1 : 4;
+      numberToShow = (widget.returnMaterialActionWidgetsOnly == true) ? 1 : 3;
     }
 
     updateObx(() {
