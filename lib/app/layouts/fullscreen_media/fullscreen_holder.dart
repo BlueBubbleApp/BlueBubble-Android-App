@@ -93,7 +93,7 @@ class FullscreenMediaHolderState extends OptimizedState<FullscreenMediaHolder> {
           child: Scaffold(
             appBar: !iOS || !showAppBar
                 // AppBar placeholder to prevent shifting of content when toggling the app bar
-                ? PreferredSize(preferredSize: const Size.fromHeight(88), child: Container())
+                ? PreferredSize(preferredSize: Size.fromHeight(attachment.message.target == null ? 56 : 88), child: Container())
                 : AppBar(
                     leading: XGestureDetector(
                       supportTouch: true,
@@ -122,7 +122,7 @@ class FullscreenMediaHolderState extends OptimizedState<FullscreenMediaHolder> {
                     centerTitle: iOS,
                     iconTheme: IconThemeData(color: context.theme.colorScheme.primary),
                     backgroundColor: context.theme.colorScheme.properSurface,
-                    bottom: PreferredSize(
+                    bottom: (attachment.message.target == null) ? null : PreferredSize(
                       preferredSize: const Size.fromHeight(32),
                       child: Column(
                           children : [
