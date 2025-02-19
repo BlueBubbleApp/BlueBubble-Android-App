@@ -85,6 +85,13 @@ android {
             resValue "string", "file_provider", "com.bluebubbles.messaging.tanay.fileprovider"
             applicationId "com.bluebubbles.messaging.tanay"
         }
+        developerblue {
+            dimension "app"
+            resValue "string", "app_name_en", "BlueBubbles Dev (DeveloperBlue)"
+            resValue "color", "ic_launcher_background", "#4477db"
+            resValue "string", "file_provider", "com.bluebubbles.messaging.developerblue.fileprovider"
+            applicationId "com.bluebubbles.messaging.developerblue"
+        }
         alpha {
             dimension "app"
             resValue "string", "app_name_en", "BlueBubbles (Alpha)"
@@ -113,6 +120,7 @@ android {
         release {
             productFlavors.joel.signingConfig signingConfigs.debug
             productFlavors.tanay.signingConfig signingConfigs.debug
+            productFlavors.developerblue.signingConfig signingConfigs.debug
             productFlavors.alpha.signingConfig signingConfigs.release
             productFlavors.beta.signingConfig signingConfigs.release
             productFlavors.prod.signingConfig signingConfigs.release
