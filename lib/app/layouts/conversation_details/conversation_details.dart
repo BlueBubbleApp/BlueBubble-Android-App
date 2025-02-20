@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:bluebubbles/app/layouts/conversation_attachments/conversation_attachments.dart';
+import 'package:bluebubbles/app/layouts/conversation_attachments/widgets/attachment_popup_holder.dart';
 import 'package:bluebubbles/app/layouts/conversation_details/dialogs/add_participant.dart';
 import 'package:bluebubbles/app/layouts/conversation_details/widgets/chat_info.dart';
 import 'package:bluebubbles/app/layouts/conversation_details/widgets/chat_options.dart';
+import 'package:bluebubbles/app/layouts/conversation_details/widgets/attachments_title.dart';
 import 'package:bluebubbles/app/layouts/conversation_view/widgets/message/interactive/url_preview.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/app/layouts/conversation_details/widgets/media_gallery_card.dart';
@@ -22,6 +25,9 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+/* Max number of previews to show for each attachment type on the conversation_details page */
+const maxAttachmentPreviews = 6;
 
 class ConversationDetails extends StatefulWidget {
   final Chat chat;
@@ -52,6 +58,8 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
     super.initState();
 
     cm.setActiveToDead();
+
+    selected.value = [];
 
     if (!kIsWeb) {
       final chatQuery = Database.chats.query(Chat_.guid.equals(chat.guid)).watch();
@@ -100,11 +108,11 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
     chat.getAttachmentsAsync().then((value) {
       final _media = value.where((e) => !(e.message.target?.isGroupEvent ?? true)
           && !(e.message.target?.isInteractive ?? true)
-          && (e.mimeStart == "image" || e.mimeStart == "video")).take(24);
+          && (e.mimeStart == "image" || e.mimeStart == "video"));
       final _docs = value.where((e) => !(e.message.target?.isGroupEvent ?? true)
           && !(e.message.target?.isInteractive ?? true)
-          && e.mimeStart != "image" && e.mimeStart != "video" && !(e.mimeType ?? "").contains("location")).take(24);
-      final _locations = value.where((e) => (e.mimeType ?? "").contains("location")).take(10);
+          && e.mimeStart != "image" && e.mimeStart != "video" && !(e.mimeType ?? "").contains("location"));
+      final _locations = value.where((e) => (e.mimeType ?? "").contains("location"));
       for (Attachment a in _media) {
         a.message.target?.handle = chat.participants.firstWhereOrNull((e) => e.originalROWID == a.message.target?.handleId);
       }
@@ -340,14 +348,19 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
             ChatOptions(chat: chat),
             if (!kIsWeb && media.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.only(top: 20, bottom: 10, left: 15),
+                padding: const EdgeInsets.only(top: 20, bottom: 0, left: 15),
                 sliver: SliverToBoxAdapter(
-                  child: Text("IMAGES & VIDEOS", style: context.theme.textTheme.bodyMedium!.copyWith(color: context.theme.colorScheme.outline)),
+                  child: AttachmentsTitle(
+                    title: "PHOTOS & VIDEOS",
+                    attachmentsType: AttachmentTypes.media,
+                    attachments: media,
+                    chat: chat,
+                  ),
                 ),
               ),
             if (!kIsWeb && media.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.only(top: 0, bottom: 10, left: 10, right: 10),
                 sliver: SliverGrid(
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: max(2, ns.width(context) ~/ 200),
@@ -363,64 +376,69 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
                           borderRadius: BorderRadius.circular(20),
                         ),
                         clipBehavior: Clip.antiAlias,
-                        child: GestureDetector(
-                          onTap: selected.isNotEmpty ? () {
-                            if (selected.contains(media[index].guid)) {
-                              selected.remove(media[index].guid!);
-                            } else {
-                              selected.add(media[index].guid!);
-                            }
-                          } : null,
-                          onLongPress: () {
-                            if (selected.contains(media[index].guid)) {
-                              selected.remove(media[index].guid!);
-                            } else {
-                              selected.add(media[index].guid!);
-                            }
-                          },
-                          child: AbsorbPointer(
-                            absorbing: selected.isNotEmpty,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                MediaGalleryCard(
-                                  attachment: media[index],
-                                ),
-                                if (selected.contains(media[index].guid))
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: context.theme.colorScheme.primary
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(5.0),
-                                      child: Icon(
-                                        iOS ? CupertinoIcons.check_mark : Icons.check,
-                                        color: context.theme.colorScheme.onPrimary,
-                                        size: 18,
+                        child: AttachmentPopupHolder(
+                          key : ValueKey(media[index].guid),
+                          message : media[index].message.target!,
+                          attachment: media[index],
+                          selected : selected,
+                          setMaterialDetailsMenu : null,
+                          child: GestureDetector(
+                            onTap: selected.isNotEmpty ? () {
+                              if (selected.contains(media[index].guid)) {
+                                selected.remove(media[index].guid!);
+                              } else {
+                                selected.add(media[index].guid!);
+                              }
+                            } : null,
+                            child: AbsorbPointer(
+                              absorbing: selected.isNotEmpty,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  MediaGalleryCard(
+                                    attachment: media[index],
+                                  ),
+                                  if (selected.contains(media[index].guid))
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: context.theme.colorScheme.primary
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(5.0),
+                                        child: Icon(
+                                          iOS ? CupertinoIcons.check_mark : Icons.check,
+                                          color: context.theme.colorScheme.onPrimary,
+                                          size: 18,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ));
                     },
-                    childCount: media.length,
+                    childCount: min(maxAttachmentPreviews, media.length),
                   ),
                 ),
               ),
             if (!kIsWeb && links.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.only(top: 20, bottom: 10, left: 15),
+                padding: const EdgeInsets.only(top: 20, bottom: 0, left: 15),
                 sliver: SliverToBoxAdapter(
-                  child: Text("LINKS", style: context.theme.textTheme.bodyMedium!.copyWith(color: context.theme.colorScheme.outline)),
+                  child: AttachmentsTitle(
+                    title: "LINKS",
+                    attachmentsType: AttachmentTypes.links,
+                    links : links,
+                    chat: chat,
+                  ),
                 ),
               ),
             if (!kIsWeb && links.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.only(top: 0, bottom: 10, left: 10, right: 10),
                 sliver: SliverToBoxAdapter(
                   child: MasonryGridView.count(
                     crossAxisCount: max(2, ns.width(context) ~/ 200),
@@ -432,43 +450,56 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
                       if (links[index].payloadData?.urlData?.firstOrNull == null) {
                         return const Text("Failed to load link!");
                       }
-                      return Material(
-                        color: context.theme.colorScheme.properSurface,
-                        borderRadius: BorderRadius.circular(20),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
+                      return AttachmentPopupHolder(
+                        key : ValueKey(links[index].guid),
+                        message : links[index],
+                        url : links[index].payloadData?.urlData?.first.url,
+                        selected : selected,
+                        setMaterialDetailsMenu : null,
+                        child: Material(
+                          color: context.theme.colorScheme.properSurface,
                           borderRadius: BorderRadius.circular(20),
-                          onTap: () async {
-                            final data = links[index].payloadData!.urlData!.first;
-                            if ((data.url ?? data.originalUrl) == null) return;
-                            await launchUrl(
-                                Uri.parse((data.url ?? data.originalUrl)!),
-                                mode: LaunchMode.externalApplication
-                            );
-                          },
-                          child: Center(
-                            child: UrlPreview(
-                              data: links[index].payloadData!.urlData!.first,
-                              message: links[index],
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () async {
+                              final data = links[index].payloadData!.urlData!.first;
+                              if ((data.url ?? data.originalUrl) == null) return;
+                              await launchUrl(
+                                  Uri.parse((data.url ?? data.originalUrl)!),
+                                  mode: LaunchMode.externalApplication
+                              );
+                            },
+                            child: Center(
+                              child: UrlPreview(
+                                data: links[index].payloadData!.urlData!.first,
+                                message: links[index],
+                              ),
                             ),
                           ),
                         ),
                       );
                     },
-                    itemCount: links.length,
+                    itemCount: min(maxAttachmentPreviews, links.length),
                   ),
                 ),
               ),
             if (!kIsWeb && locations.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.only(top: 20, bottom: 10, left: 15),
+                padding: const EdgeInsets.only(top: 20, bottom: 0, left: 15),
                 sliver: SliverToBoxAdapter(
-                  child: Text("LOCATIONS", style: context.theme.textTheme.bodyMedium!.copyWith(color: context.theme.colorScheme.outline)),
+                  child: AttachmentsTitle(
+                    title: "LOCATIONS",
+                    attachmentsType: AttachmentTypes.locations,
+                    attachments: locations,
+                    links : links,
+                    chat: chat,
+                  ),
                 ),
               ),
             if (!kIsWeb && locations.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.only(top: 0, bottom: 10, left: 10, right: 10),
                 sliver: SliverToBoxAdapter(
                   child: MasonryGridView.count(
                     crossAxisCount: max(2, ns.width(context) ~/ 200),
@@ -480,47 +511,60 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
                       if (as.getContent(locations[index]) is! PlatformFile) {
                         return const Text("Failed to load location!");
                       }
-                      return Material(
-                        color: context.theme.colorScheme.properSurface,
-                        borderRadius: BorderRadius.circular(20),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
+                      return AttachmentPopupHolder(
+                        key : ValueKey(locations[index].guid),
+                        message : locations[index].message.target!,
+                        attachment : locations[index],
+                        url : links[index].payloadData?.urlData?.first.url,
+                        selected : selected,
+                        setMaterialDetailsMenu : null,
+                        child: Material(
+                          color: context.theme.colorScheme.properSurface,
                           borderRadius: BorderRadius.circular(20),
-                          onTap: () async {
-                            final data = links[index].payloadData!.urlData!.first;
-                            if ((data.url ?? data.originalUrl) == null) return;
-                            await launchUrl(
-                                Uri.parse((data.url ?? data.originalUrl)!),
-                                mode: LaunchMode.externalApplication
-                            );
-                          },
-                          child: Center(
-                            child: UrlPreview(
-                              data: UrlPreviewData(
-                                title: "Location from ${DateFormat.yMd().format(locations[index].message.target!.dateCreated!)}",
-                                siteName: "Tap to open",
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () async {
+                              final data = links[index].payloadData!.urlData!.first;
+                              if ((data.url ?? data.originalUrl) == null) return;
+                              await launchUrl(
+                                  Uri.parse((data.url ?? data.originalUrl)!),
+                                  mode: LaunchMode.externalApplication
+                              );
+                            },
+                            child: Center(
+                              child: UrlPreview(
+                                data: UrlPreviewData(
+                                  title: "Location from ${DateFormat.yMd().format(locations[index].message.target!.dateCreated!)}",
+                                  siteName: "Tap to open",
+                                ),
+                                message: locations[index].message.target!,
+                                file: as.getContent(locations[index]),
                               ),
-                              message: locations[index].message.target!,
-                              file: as.getContent(locations[index]),
                             ),
                           ),
                         ),
                       );
                     },
-                    itemCount: locations.length,
+                    itemCount: min(maxAttachmentPreviews, locations.length),
                   ),
                 ),
               ),
             if (!kIsWeb && docs.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.only(top: 20, bottom: 10, left: 15),
+                padding: const EdgeInsets.only(top: 20, bottom: 0, left: 15),
                 sliver: SliverToBoxAdapter(
-                  child: Text("OTHER FILES", style: context.theme.textTheme.bodyMedium!.copyWith(color: context.theme.colorScheme.outline)),
+                  child: AttachmentsTitle(
+                    title: "OTHER FILES",
+                    attachmentsType: AttachmentTypes.documents,
+                    attachments: docs,
+                    chat: chat,
+                  ),
                 ),
               ),
             if (!kIsWeb && docs.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.only(top: 0, bottom: 10, left: 10, right: 10),
                 sliver: SliverGrid(
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: max(2, ns.width(context) ~/ 200),
@@ -530,11 +574,18 @@ class _ConversationDetailsState extends OptimizedState<ConversationDetails> with
                   ),
                   delegate: SliverChildBuilderDelegate(
                         (context, int index) {
-                      return MediaGalleryCard(
-                        attachment: docs[index],
+                      return AttachmentPopupHolder(
+                        key : ValueKey(docs[index].guid),
+                        message : docs[index].message.target!,
+                        attachment : docs[index],
+                        selected : selected,
+                        setMaterialDetailsMenu : null,
+                        child: MediaGalleryCard(
+                          attachment: docs[index],
+                        ),
                       );
                     },
-                    childCount: docs.length,
+                    childCount: min(maxAttachmentPreviews, docs.length),
                   ),
                 ),
               ),
